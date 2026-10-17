@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["host", "tools/*", "bench/loggen", "bench/native"]
+exclude = ["tools/zoo-common"]
 # `cargo build` builds the native host and benchmark helpers; the tools are
 # built for wasm32-wasip2 via `cargo tools` (see .cargo/config.toml).
 default-members = ["host", "bench/loggen", "bench/native"]

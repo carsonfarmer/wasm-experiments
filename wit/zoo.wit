@@ -1,0 +1,73 @@
+package wp:demo@0.1.0;
+
+/// Every kind of value the host pump can copy, for round-trip tests.
+interface menagerie {
+  flags perms { read, write, exec }
+
+  enum color { red, green, blue }
+
+  record point {
+    x: s32,
+    y: s32,
+    tag: option<string>,
+  }
+
+  variant shape {
+    circle(f64),
+    rect(tuple<u32, u32>),
+    label(string),
+    points(list<point>),
+    empty,
+  }
+
+  record row {
+    id: u64,
+    flag: bool,
+    tiny: s8,
+    small: u16,
+    medium: s32,
+    single: f32,
+    double: f64,
+    letter: char,
+    name: string,
+    tags: list<string>,
+    nums: list<u32>,
+    nested: list<list<string>>,
+    points: list<point>,
+    maybe: option<string>,
+    outcome: result<string, u32>,
+    check: result<_, string>,
+    shape: shape,
+    color: color,
+    perms: perms,
+    pair: tuple<string, list<u8>>,
+    bytes: list<u8>,
+    nothing: list<string>,
+  }
+
+  /// A projection of `row`: some fields, in a different order.
+  record row-lite {
+    shape: shape,
+    name: string,
+    id: u64,
+    points: list<point>,
+  }
+}
+
+/// Emits `count` deterministic rows derived from `seed`.
+world zoo {
+  use menagerie.{row};
+  export run: async func(count: u64, seed: u64) -> stream<row>;
+}
+
+/// Regenerates the expected rows and compares; returns how many matched.
+world zoo-check {
+  use menagerie.{row};
+  export run: async func(input: stream<row>, count: u64, seed: u64) -> u64;
+}
+
+/// `zoo-check` reading only some fields (a projection).
+world zoo-check-lite {
+  use menagerie.{row-lite};
+  export run: async func(input: stream<row-lite>, count: u64, seed: u64) -> u64;
+}

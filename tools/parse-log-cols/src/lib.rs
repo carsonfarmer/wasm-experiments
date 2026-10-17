@@ -7,7 +7,7 @@ wit_bindgen::generate!({
 });
 
 use cols::StrColBuilder;
-use logparse::Lines;
+use logparse::{Lines, Parser};
 use wp::demo::cols::StrCol;
 use wp::demo::logs::Method;
 
@@ -81,6 +81,7 @@ impl Guest for ParseLogCols {
         let (mut tx, rx) = wit_stream::new();
         wit_bindgen::spawn_local(async move {
             let mut lines = Lines::default();
+            let mut parser = Parser::default();
             let mut b = Builder::default();
             let mut buf = Vec::with_capacity(CHUNK);
             let mut skipped = 0u64;
@@ -89,7 +90,7 @@ impl Guest for ParseLogCols {
                 if data.is_empty() {
                     break;
                 }
-                lines.feed(&data, |l| match logparse::parse(l) {
+                lines.feed(&data, |l| match parser.parse(l) {
                     Some(r) => b.push(r),
                     None => skipped += 1,
                 });
@@ -99,7 +100,7 @@ impl Guest for ParseLogCols {
                 buf = data;
                 buf.clear();
             }
-            lines.finish(|l| match logparse::parse(l) {
+            lines.finish(|l| match parser.parse(l) {
                 Some(r) => b.push(r),
                 None => skipped += 1,
             });

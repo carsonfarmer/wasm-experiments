@@ -1,4 +1,5 @@
-//! Host built-in stages that aren't components.
+//! `cat FILE`: a host built-in that streams a file as `stream<u8>`, reading
+//! straight into the consumer's read buffer (no intermediate copy).
 
 use std::fs::File;
 use std::io::Read;
@@ -10,9 +11,7 @@ use std::task::{Context, Poll};
 use wasmtime::component::{Destination, StreamAny, StreamProducer, StreamReader, StreamResult, VecBuffer};
 use wasmtime::{AsContextMut, StoreContextMut};
 
-/// `cat PATH`: stream a file's bytes as a `stream<u8>`, reading straight into
-/// the consumer's read buffer (no intermediate copy).
-pub struct Cat {
+struct Cat {
     file: File,
     bytes: Arc<AtomicU64>,
 }
@@ -23,43 +22,33 @@ impl<D: 'static> StreamProducer<D> for Cat {
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        _: &mut Context<'_>,
         mut store: StoreContextMut<'a, D>,
-        dst: Destination<'a, u8, VecBuffer<u8>>,
-        _finish: bool,
+        mut dst: Destination<'a, u8, VecBuffer<u8>>,
+        _: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let me = self.get_mut();
         let n = match dst.remaining(store.as_context_mut()) {
             Some(0) => return Poll::Ready(Ok(StreamResult::Completed)),
+            // A guest reader: read the file directly into its buffer.
             Some(cap) => {
                 let mut direct = dst.as_direct(store, cap);
-                let n = read_full(&mut me.file, direct.remaining())?;
+                let n = me.file.read(direct.remaining())?;
                 direct.mark_written(n);
                 n
             }
+            // A host reader: hand it a chunk.
             None => {
-                let mut buf = vec![0u8; 1 << 16];
-                let n = read_full(&mut me.file, &mut buf)?;
+                let mut buf = vec![0; 1 << 16];
+                let n = me.file.read(&mut buf)?;
                 buf.truncate(n);
-                let mut dst = dst;
-                dst.set_buffer(VecBuffer::from(buf));
+                dst.set_buffer(buf.into());
                 n
             }
         };
         me.bytes.fetch_add(n as u64, Relaxed);
         Poll::Ready(Ok(if n == 0 { StreamResult::Dropped } else { StreamResult::Completed }))
     }
-}
-
-fn read_full(file: &mut File, buf: &mut [u8]) -> std::io::Result<usize> {
-    let mut n = 0;
-    while n < buf.len() {
-        match file.read(&mut buf[n..])? {
-            0 => break,
-            k => n += k,
-        }
-    }
-    Ok(n)
 }
 
 pub fn cat<D: 'static>(

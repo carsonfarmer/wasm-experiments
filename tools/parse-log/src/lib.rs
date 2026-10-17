@@ -5,7 +5,7 @@ wit_bindgen::generate!({
     path: "../../wit",
 });
 
-use logparse::Lines;
+use logparse::{Lines, Parser};
 use wp::demo::logs::Method;
 
 struct ParseLog;
@@ -44,6 +44,7 @@ impl Guest for ParseLog {
         let (mut tx, rx) = wit_stream::new();
         wit_bindgen::spawn_local(async move {
             let mut lines = Lines::default();
+            let mut parser = Parser::default();
             let mut buf = Vec::with_capacity(CHUNK);
             let mut skipped = 0u64;
             loop {
@@ -52,7 +53,7 @@ impl Guest for ParseLog {
                     break;
                 }
                 let mut out = Vec::with_capacity(data.len() / 200);
-                lines.feed(&data, |l| match logparse::parse(l) {
+                lines.feed(&data, |l| match parser.parse(l) {
                     Some(r) => out.push(row(r)),
                     None => skipped += 1,
                 });
@@ -63,7 +64,7 @@ impl Guest for ParseLog {
                 buf.clear();
             }
             let mut out = Vec::new();
-            lines.finish(|l| match logparse::parse(l) {
+            lines.finish(|l| match parser.parse(l) {
                 Some(r) => out.push(row(r)),
                 None => skipped += 1,
             });

@@ -15,3 +15,12 @@ wasmtime.workspace = true
 wasmtime-wasi.workspace = true
 tokio.workspace = true
 anyhow = "1"
+libc = "0.2"
+seq-macro = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+stats_alloc = "0.1"
+
+[dev-dependencies]
+loggen = { path = "../bench/loggen" }
+logparse = { path = "../tools/logparse" }

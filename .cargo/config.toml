@@ -1,8 +1,10 @@
 [alias]
 # Build every tool component into target/wasm32-wasip2/release/<name>.wasm
-tools = "build --release --target wasm32-wasip2 -p gen -p show -p count -p fruit -p weigh -p gen-cols -p show-cols -p count-cols -p parse-log -p errors -p top-paths -p parse-log-cols -p errors-cols -p top-paths-cols -p top-paths-full -p top-paths-cols-full"
+tools = "build --release --target wasm32-wasip2 -p gen -p show -p count -p fruit -p weigh -p gen-cols -p show-cols -p count-cols -p parse-log -p errors -p top-paths -p parse-log-cols -p errors-cols -p top-paths-cols -p top-paths-full -p top-paths-cols-full -p zoo -p zoo-check -p zoo-check-lite"
 # Run a pipeline: cargo wp 'gen 10 | show'
 wp = "run --release -q -p wp --"
+# Every native test (the components must be built first with `cargo tools`)
+test-all = "test --release -p wp -p logparse -p cols"
 
 # Tools may use 128-bit SIMD (memchr's line splitting does); Wasmtime enables it by default.
 [target.wasm32-wasip2]

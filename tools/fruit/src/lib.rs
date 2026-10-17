@@ -20,7 +20,7 @@ impl Guest for FruitStand {
                 let fruit = Fruit {
                     name: format!("{name}-{i}"),
                     tags: tags.iter().map(|t| t.to_string()).collect(),
-                    grams: (i % 3 != 0).then(|| 80.0 + (i as f64 * 7.5) % 120.0),
+                    grams: (!i.is_multiple_of(3)).then(|| 80.0 + (i as f64 * 7.5) % 120.0),
                     ripeness: [Ripeness::Green, Ripeness::Ripe, Ripeness::Overripe][i as usize % 3],
                 };
                 if tx.write_one(fruit).await.is_some() {
@@ -34,10 +34,7 @@ impl Guest for FruitStand {
     }
 }
 
-const KINDS: [(&str, &[&str]); 3] = [
-    ("apple", &["crisp", "red"]),
-    ("banana", &["soft"]),
-    ("kiwi", &["fuzzy", "green", "tart"]),
-];
+const KINDS: [(&str, &[&str]); 3] =
+    [("apple", &["crisp", "red"]), ("banana", &["soft"]), ("kiwi", &["fuzzy", "green", "tart"])];
 
 export!(FruitStand);
