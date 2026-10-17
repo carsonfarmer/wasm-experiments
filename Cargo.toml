@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["host", "tools/*"]
+# `cargo build` / `cargo run` default to the native host only; the tools are
+# built for wasm32-wasip2 via `cargo tools` (see .cargo/config.toml).
+default-members = ["host"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+wasmtime = "49.0.3"
+wasmtime-wasi = "49.0.3"
+wit-bindgen = { version = "0.63.0", features = ["async-spawn"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

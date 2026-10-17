@@ -1,0 +1,53 @@
+package wp:demo@0.1.0;
+
+interface types {
+  /// A fake git commit: the row type flowing through the demo pipelines.
+  record commit {
+    sha: string,
+    author: string,
+    message: string,
+    time: s64,
+  }
+}
+
+/// Producer: emits `count` commits (forever if omitted), `batch` per write.
+world gen {
+  use types.{commit};
+  export run: async func(count: option<u64>, batch: option<u32>) -> stream<commit>;
+}
+
+/// Consumer: prints each commit and returns how many it saw.
+world show {
+  use types.{commit};
+  export run: async func(input: stream<commit>) -> u64;
+}
+
+/// Consumer: counts commits without printing, reading `batch` at a time.
+world count {
+  use types.{commit};
+  export run: async func(input: stream<commit>, batch: option<u32>) -> u64;
+}
+
+interface produce {
+  enum ripeness { green, ripe, overripe }
+
+  /// A second, differently shaped row type: lists, options and enums.
+  record fruit {
+    name: string,
+    tags: list<string>,
+    grams: option<f64>,
+    ripeness: ripeness,
+  }
+}
+
+/// Producer: emits `count` fruit, or never stops if `count` is omitted.
+world fruit {
+  use produce.{fruit};
+  export run: async func(count: option<u32>) -> stream<fruit>;
+}
+
+/// Consumer: prints each fruit and returns how many it saw.
+world weigh {
+  use produce.{fruit};
+  export run: async func(input: stream<fruit>) -> u64;
+}

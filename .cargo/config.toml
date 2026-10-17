@@ -1,0 +1,5 @@
+[alias]
+# Build every tool component into target/wasm32-wasip2/release/<name>.wasm
+tools = "build --release --target wasm32-wasip2 -p gen -p show -p count -p fruit -p weigh"
+# Run a pipeline: cargo wp 'gen 10 | show'
+wp = "run --release -q -p wp --"

@@ -1,0 +1,14 @@
+[package]
+name = "wp"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wp"
+path = "src/main.rs"
+
+[dependencies]
+wasmtime.workspace = true
+wasmtime-wasi.workspace = true
+tokio.workspace = true
+anyhow = "1"
