@@ -1,0 +1,11 @@
+[package]
+name = "native-logs"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "native-logs"
+path = "src/main.rs"
+
+[dependencies]
+logparse = { path = "../../tools/logparse" }

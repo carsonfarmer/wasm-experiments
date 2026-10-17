@@ -1,0 +1,93 @@
+package wp:demo@0.1.0;
+
+/// Web server access logs (Combined Log Format), as rows and as columns.
+interface logs {
+  use cols.{str-col};
+
+  enum method { get, head, post, put, delete, patch, options, other }
+
+  /// One request: `ip - - [time] "method path proto" status bytes "referrer" "agent"`.
+  record request {
+    ip: string,
+    /// Unix seconds.
+    time: s64,
+    method: method,
+    path: string,
+    status: u16,
+    bytes: u64,
+    referrer: string,
+    agent: string,
+  }
+
+  /// All `top-paths` needs from a request. A consumer can declare a record
+  /// with a subset of the producer's fields; the host copies only those.
+  record path-only {
+    path: string,
+  }
+
+  /// All `top-paths-cols` needs from a request batch.
+  record path-batch {
+    path: str-col,
+  }
+
+  /// The same fields, one column each; one element carries a batch of rows.
+  record request-batch {
+    ip: str-col,
+    time: list<s64>,
+    method: list<method>,
+    path: str-col,
+    status: list<u16>,
+    bytes: list<u64>,
+    referrer: str-col,
+    agent: str-col,
+  }
+}
+
+/// Parse log lines into request rows.
+world parse-log {
+  use logs.{request};
+  export run: async func(input: stream<u8>) -> stream<request>;
+}
+
+/// Keep requests whose status is at least `min-status` (default 500).
+world errors {
+  use logs.{request};
+  export run: async func(input: stream<request>, min-status: option<u16>) -> stream<request>;
+}
+
+/// Print the `n` most requested paths (default 10); returns rows seen.
+/// Reads only the `path` field.
+world top-paths {
+  use logs.{path-only};
+  export run: async func(input: stream<path-only>, n: option<u32>) -> u64;
+}
+
+/// `top-paths`, but declaring the whole `request` row (for comparison).
+world top-paths-full {
+  use logs.{request};
+  export run: async func(input: stream<request>, n: option<u32>) -> u64;
+}
+
+/// Columnar `parse-log`.
+world parse-log-cols {
+  use logs.{request-batch};
+  export run: async func(input: stream<u8>) -> stream<request-batch>;
+}
+
+/// Columnar `errors`.
+world errors-cols {
+  use logs.{request-batch};
+  export run: async func(input: stream<request-batch>, min-status: option<u16>) -> stream<request-batch>;
+}
+
+/// Columnar `top-paths`; reads only the `path` column.
+world top-paths-cols {
+  use logs.{path-batch};
+  export run: async func(input: stream<path-batch>, n: option<u32>) -> u64;
+}
+
+/// Columnar `top-paths`, declaring the whole batch (for comparison).
+world top-paths-cols-full {
+  use logs.{request-batch};
+  export run: async func(input: stream<request-batch>, n: option<u32>) -> u64;
+}

@@ -1,0 +1,11 @@
+[package]
+name = "top-paths"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen.workspace = true
+logparse = { path = "../logparse" }

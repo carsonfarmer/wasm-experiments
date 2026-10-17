@@ -1,0 +1,12 @@
+package wp:demo@0.1.0;
+
+/// Building blocks for columnar batches.
+interface cols {
+  /// A column of strings in Arrow's UTF-8 layout: every value concatenated
+  /// in `data`, and value `i` is `data[offsets[i]..offsets[i + 1]]`.
+  /// `offsets` has one more entry than there are rows.
+  record str-col {
+    data: string,
+    offsets: list<u32>,
+  }
+}

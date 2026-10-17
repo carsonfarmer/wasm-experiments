@@ -1,0 +1,11 @@
+[package]
+name = "count-cols"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen.workspace = true
+cols = { path = "../cols" }

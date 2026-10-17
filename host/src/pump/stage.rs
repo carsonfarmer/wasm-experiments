@@ -1,19 +1,22 @@
 //! A stage is one batch of rows held by the host between two components.
 //!
-//! Rows are kept in canonical-ABI layout: `fixed` holds each row's fixed-size
-//! block back to back, and `heap` holds all their strings and list contents.
-//! Every `(ptr, len)` pair is rewritten to point into `heap`. Lifting a batch
-//! from a producer is a few `memcpy`s into these two buffers; lowering it into
-//! a consumer is a `memcpy` of `fixed` plus one `realloc` + `memcpy` per
-//! string or list. Stages are recycled, so steady-state forwarding performs no
-//! host allocations.
+//! Rows are kept in the producer's canonical-ABI layout: `fixed` holds each
+//! row's fixed-size block back to back, and `heap` holds all their strings and
+//! list contents, with every `(ptr, len)` rewritten to point into `heap`.
+//! Lifting a batch from a producer is a few `memcpy`s; lowering it into a
+//! consumer is a `memcpy` of `fixed` plus one `realloc` + `memcpy` per string
+//! or list the consumer asked for. Stages are recycled, so steady-state
+//! forwarding performs no host allocations.
 
-use super::plan::{Fix, Plan};
-use anyhow::{Result, anyhow, bail};
 use super::pipe::Counters;
+use super::plan::{Fix, Layout, Plan, Proj};
+use anyhow::{Result, anyhow, bail};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 use wasmtime::component::__internal::{InterfaceType, LowerContext};
+
+/// Cached projection for the consumer: (types address, type, projection, row size).
+pub(super) type LowerCache = Option<(usize, InterfaceType, Arc<Proj>, usize)>;
 
 #[derive(Default)]
 pub struct Stage {
@@ -21,9 +24,11 @@ pub struct Stage {
     pub heap: Vec<u8>,
     pub rows: usize,
     pub size: usize,
-    /// Plan for lowering into the consumer, compiled from its own types.
-    pub(super) lower_plan: Mutex<Option<(usize, InterfaceType, Arc<Plan>)>>,
-    /// The owning pipe's counters (for `realloc` calls into the consumer).
+    /// The producer's row layout (what `fixed` holds).
+    pub src: Option<Arc<Layout>>,
+    /// How to lower into the consumer, compiled from its own types.
+    pub(super) lower: Mutex<LowerCache>,
+    /// The owning pipe's counters.
     pub counters: Option<Arc<Counters>>,
 }
 
@@ -51,49 +56,48 @@ impl Stage {
         Ok((self.rows - 1) as u32)
     }
 
-    /// Write rows `first..first + n` into the consumer's memory at `dst`.
+    /// Write rows `first..first + n` into the consumer's memory at `dst`,
+    /// where each consumer row is `dst_size` bytes.
     pub fn lower_rows<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
-        plan: &Plan,
+        proj: &Proj,
+        dst_size: usize,
         first: usize,
         n: usize,
         dst: usize,
     ) -> wasmtime::Result<()> {
         let t0 = std::time::Instant::now();
-        let result = self.lower_rows_inner(cx, plan, first, n, dst);
+        let mut reallocs = 0u64;
+        let result = (|| {
+            match proj {
+                // Same row type: one memcpy for every row's fixed block.
+                Proj::Copy(plan) => {
+                    let bytes = &self.fixed[first * self.size..(first + n) * self.size];
+                    cx.as_slice_mut()
+                        .get_mut(dst..dst + bytes.len())
+                        .ok_or_else(|| wasmtime::format_err!("read buffer out of bounds"))?
+                        .copy_from_slice(bytes);
+                    if !plan.is_flat() {
+                        for k in 0..n {
+                            lower(cx, &plan.fixes, &self.heap, self.row(first + k), dst + k * dst_size, &mut reallocs)?;
+                        }
+                    }
+                }
+                // Projected: build each consumer row field by field.
+                Proj::Fields(_) => {
+                    for k in 0..n {
+                        lower_proj(cx, proj, &self.heap, self.row(first + k), dst + k * dst_size, &mut reallocs)?;
+                    }
+                }
+            }
+            Ok(())
+        })();
         if let Some(c) = &self.counters {
             c.lower_ns.fetch_add(t0.elapsed().as_nanos() as u64, Relaxed);
-        }
-        result
-    }
-
-    fn lower_rows_inner<T>(
-        &self,
-        cx: &mut LowerContext<'_, T>,
-        plan: &Plan,
-        first: usize,
-        n: usize,
-        dst: usize,
-    ) -> wasmtime::Result<()> {
-        let size = plan.size;
-        let bytes = &self.fixed[first * size..(first + n) * size];
-        cx.as_slice_mut()
-            .get_mut(dst..dst + bytes.len())
-            .ok_or_else(|| wasmtime::format_err!("read buffer out of bounds"))?
-            .copy_from_slice(bytes);
-        if plan.is_flat() {
-            return Ok(());
-        }
-        let mut reallocs = 0u64;
-        for k in 0..n {
-            let row = &self.fixed[(first + k) * size..(first + k + 1) * size];
-            lower(cx, &plan.fixes, &self.heap, row, dst + k * size, &mut reallocs)?;
-        }
-        if let Some(c) = &self.counters {
             c.reallocs.fetch_add(reallocs, Relaxed);
         }
-        Ok(())
+        result
     }
 }
 
@@ -172,6 +176,32 @@ fn lift(
         }
     }
     Ok(())
+}
+
+/// Build one projected value at `at` in the consumer from the staged value `src`.
+fn lower_proj<T>(
+    cx: &mut LowerContext<'_, T>,
+    proj: &Proj,
+    heap: &[u8],
+    src: &[u8],
+    at: usize,
+    reallocs: &mut u64,
+) -> wasmtime::Result<()> {
+    match proj {
+        Proj::Copy(plan) => {
+            cx.as_slice_mut()
+                .get_mut(at..at + plan.size)
+                .ok_or_else(|| wasmtime::format_err!("read buffer out of bounds"))?
+                .copy_from_slice(&src[..plan.size]);
+            lower(cx, &plan.fixes, heap, src, at, reallocs)
+        }
+        Proj::Fields(fields) => {
+            for (d, s, p) in fields {
+                lower_proj(cx, p, heap, &src[*s..], at + d, reallocs)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Follow the pointers of one value already copied into the consumer's memory

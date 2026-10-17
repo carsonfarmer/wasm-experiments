@@ -11,7 +11,7 @@
 //! This relies on Wasmtime's `#[doc(hidden)]` lift/lower hooks
 //! (`wasmtime::component::__internal`), so it is pinned to one Wasmtime version.
 
-use super::plan::{self, Plan};
+use super::plan::{self, Layout, Need, Plan};
 use super::stage::Stage;
 use std::cell::Cell;
 use std::mem::MaybeUninit;
@@ -43,9 +43,13 @@ impl<const S: u32, const A: u32> Elem<S, A> {
 /// Where lifted rows go: set by the pump around `Source::read`.
 pub(super) struct LiftTarget<'a> {
     pub stage: &'a mut Stage,
-    pub plan: &'a mut Option<(usize, InterfaceType, Arc<Plan>)>,
+    pub plan: &'a mut LiftCache,
+    pub need: &'a Need,
     pub error: Option<anyhow::Error>,
 }
+
+/// Cached producer layout and copy plan: (types address, type, layout, plan).
+pub(super) type LiftCache = Option<(usize, InterfaceType, Arc<Layout>, Arc<Plan>)>;
 
 thread_local! {
     static LIFT: Cell<*mut LiftTarget<'static>> = const { Cell::new(std::ptr::null_mut()) };
@@ -64,21 +68,23 @@ pub(super) fn lifting_into<R>(target: &mut LiftTarget<'_>, f: impl FnOnce() -> R
     f()
 }
 
-fn cached_plan(
-    slot: &mut Option<(usize, InterfaceType, Arc<Plan>)>,
+fn lift_plan(
+    slot: &mut LiftCache,
     types: &ComponentTypes,
     ty: InterfaceType,
-) -> anyhow::Result<Arc<Plan>> {
+    need: &Need,
+) -> anyhow::Result<(Arc<Layout>, Arc<Plan>)> {
     let key = types as *const ComponentTypes as usize;
-    if let Some((k, t, p)) = slot
+    if let Some((k, t, l, p)) = slot
         && *k == key
         && *t == ty
     {
-        return Ok(p.clone());
+        return Ok((l.clone(), p.clone()));
     }
-    let p = Arc::new(plan::compile(types, &ty)?);
-    *slot = Some((key, ty, p.clone()));
-    Ok(p)
+    let l = plan::layout(types, &ty)?;
+    let p = Arc::new(plan::plan_for(&l, need));
+    *slot = Some((key, ty, l.clone(), p.clone()));
+    Ok((l, p))
 }
 
 unsafe impl<const S: u32, const A: u32> ComponentType for Elem<S, A> {
@@ -98,7 +104,7 @@ unsafe impl<const S: u32, const A: u32> ComponentType for Elem<S, A> {
         if abi.size32 != S || abi.align32 != A {
             wasmtime::bail!("layout mismatch: element is {}/{}, expected {S}/{A}", abi.size32, abi.align32);
         }
-        plan::compile(types.types, ty).map_err(|e| wasmtime::format_err!("{e}"))?;
+        plan::layout(types.types, ty).map_err(|e| wasmtime::format_err!("{e}"))?;
         Ok(())
     }
 }
@@ -127,7 +133,10 @@ unsafe impl<const S: u32, const A: u32> Lift for Elem<S, A> {
             if !matches!(cx.options().string_encoding, StringEncoding::Utf8) {
                 anyhow::bail!("only UTF-8 components are supported");
             }
-            let plan = cached_plan(target.plan, cx.types, ty)?;
+            let (layout, plan) = lift_plan(target.plan, cx.types, ty, target.need)?;
+            if target.stage.src.is_none() {
+                target.stage.src = Some(layout);
+            }
             let mem = cx.memory();
             // `bytes` is a window into `mem`; recover its offset so nested
             // pointers can be followed.
@@ -181,10 +190,20 @@ unsafe impl<const S: u32, const A: u32> Lower for Elem<S, A> {
         let stage = unsafe { &*first.stage };
         let start = first.idx as usize;
         debug_assert!(items.iter().enumerate().all(|(k, e)| e.idx as usize == start + k));
-        let plan = {
-            let mut slot = stage.lower_plan.lock().unwrap();
-            cached_plan(&mut slot, cx.types, ty).map_err(|e| wasmtime::format_err!("{e}"))?
+        let (proj, size) = {
+            let mut slot = stage.lower.lock().unwrap();
+            let key = cx.types as *const ComponentTypes as usize;
+            match &*slot {
+                Some((k, t, p, size)) if *k == key && *t == ty => (p.clone(), *size),
+                _ => {
+                    let src = stage.src.as_ref().ok_or_else(|| wasmtime::format_err!("stage has no rows"))?;
+                    let dst = plan::layout(cx.types, &ty).map_err(|e| wasmtime::format_err!("{e}"))?;
+                    let proj = Arc::new(plan::project(&dst, src).map_err(|e| wasmtime::format_err!("{e}"))?);
+                    *slot = Some((key, ty, proj.clone(), dst.size));
+                    (proj, dst.size)
+                }
+            }
         };
-        stage.lower_rows(cx, &plan, start, items.len(), offset)
+        stage.lower_rows(cx, &proj, size, start, items.len(), offset)
     }
 }

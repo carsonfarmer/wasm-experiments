@@ -1,0 +1,6 @@
+[package]
+name = "cols"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

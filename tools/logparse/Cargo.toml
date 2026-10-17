@@ -1,0 +1,7 @@
+[package]
+name = "logparse"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+memchr = { version = "2", default-features = false, features = ["std"] }

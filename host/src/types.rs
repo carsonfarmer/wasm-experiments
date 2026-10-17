@@ -2,7 +2,7 @@
 //! how to print them, their canonical-ABI layout, whether they contain
 //! pointers, and whether they look like a columnar batch.
 
-use crate::pump::{BatchShape, Col};
+use crate::pump::{BatchShape, Col, Need};
 use anyhow::{Result, bail};
 use wasmtime::component::Type;
 
@@ -137,8 +137,10 @@ pub fn is_flat(ty: &Type) -> bool {
 pub fn batch_shape(ty: &Type) -> Option<BatchShape> {
     let Type::Record(r) = ty else { return None };
     let mut cols = Vec::new();
+    let mut names = Vec::new();
     let mut off = 0usize;
     for f in r.fields() {
+        names.push(f.name.to_string());
         let (size, align) = layout(&f.ty).ok()?;
         off = align_to(off, align);
         match &f.ty {
@@ -164,5 +166,37 @@ pub fn batch_shape(ty: &Type) -> Option<BatchShape> {
         }
         off += size as usize;
     }
-    (!cols.is_empty()).then_some(BatchShape { cols })
+    (!cols.is_empty()).then_some(BatchShape { cols, names })
+}
+
+/// Can a consumer that declares `want` read a stream of `have`? Yes if the
+/// types match, or if `want` is a record that takes a subset of `have`'s
+/// fields (by name, at any depth); the host pump then copies only those.
+pub fn accepts(want: &Type, have: &Type) -> bool {
+    match (want, have) {
+        (Type::Record(w), Type::Record(h)) => w.fields().all(|wf| {
+            h.fields().any(|hf| hf.name == wf.name && accepts(&wf.ty, &hf.ty))
+        }),
+        _ => describe(want) == describe(have),
+    }
+}
+
+/// What a consumer declaring `want` reads out of `have` rows.
+pub fn need(want: &Type, have: &Type) -> Need {
+    match (want, have) {
+        (Type::Record(w), Type::Record(h)) if describe(want) != describe(have) => Need::Fields(
+            w.fields()
+                .filter_map(|wf| h.fields().find(|hf| hf.name == wf.name).map(|hf| (wf.name.to_string(), need(&wf.ty, &hf.ty))))
+                .collect(),
+        ),
+        _ => Need::All,
+    }
+}
+
+/// Field names (in declaration order) of a record type.
+pub fn field_names(ty: &Type) -> Vec<String> {
+    match ty {
+        Type::Record(r) => r.fields().map(|f| f.name.to_string()).collect(),
+        _ => Vec::new(),
+    }
 }

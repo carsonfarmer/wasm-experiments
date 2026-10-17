@@ -4,7 +4,8 @@
 //!     wp 'gen | take 10 | show'                `take` is a host built-in
 //!     wp 'cat access.log | parse-log | errors | top-paths 10'
 //!     wp --stats 'gen 1000000 | count'         timing, memory and pipe counters
-//!     wp --copy wasmtime '...'                 use Wasmtime's built-in copy instead of the pump
+//!     wp --serial '...'                        run every stage in one Store on one thread
+//!     wp --copy wasmtime '...'                 use Wasmtime's built-in copy instead of the pump (implies --serial)
 
 use anyhow::{Context as _, Result, bail};
 use std::path::PathBuf;
@@ -14,7 +15,7 @@ use wp::{Copy, Options, Runner};
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc;
 
-const USAGE: &str = "usage: wp [--stats | --json] [--copy host|wasmtime] [--tools DIR] [--no-cache] 'gen 5 | take 3 | show'";
+const USAGE: &str = "usage: wp [--stats | --json] [--serial] [--copy host|wasmtime] [--tools DIR] [--no-cache] 'gen 5 | take 3 | show'";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -30,6 +31,7 @@ async fn main() -> Result<()> {
             "--stats" | "--time" => stats = true,
             "--json" => json = true,
             "--no-cache" => opts.cache = None,
+            "--serial" => opts.parallel = false,
             "--tools" => opts.tools = argv.next().context("--tools needs a directory")?.into(),
             "--copy" => {
                 opts.copy = match argv.next().as_deref() {
@@ -78,7 +80,8 @@ async fn main() -> Result<()> {
             })
             .collect();
         eprintln!(
-            r#"{{"load_ms":{:.3},"run_ms":{:.3},"rows":{},"host_allocs":{},"host_alloc_bytes":{},"peak_rss":{},"guest_memory":{},"cat_bytes":{},"pipes":[{}]}}"#,
+            r#"{{"parallel":{},"load_ms":{:.3},"run_ms":{:.3},"rows":{},"host_allocs":{},"host_alloc_bytes":{},"peak_rss":{},"guest_memory":{},"cat_bytes":{},"pipes":[{}]}}"#,
+            report.parallel,
             report.load.as_secs_f64() * 1e3,
             secs * 1e3,
             rows.map(|r| r.to_string()).unwrap_or_else(|| "null".into()),
@@ -91,7 +94,12 @@ async fn main() -> Result<()> {
         );
     } else if stats {
         let mb = |b: u64| b as f64 / (1024.0 * 1024.0);
-        eprint!("load {:.1} ms · run {:.1} ms", report.load.as_secs_f64() * 1e3, secs * 1e3);
+        eprint!(
+            "{} · load {:.1} ms · run {:.1} ms",
+            if report.parallel { "parallel" } else { "serial" },
+            report.load.as_secs_f64() * 1e3,
+            secs * 1e3
+        );
         if let Some(r) = rows {
             eprint!(" · {r} rows · {:.2} M rows/s", r as f64 / secs / 1e6);
         }

@@ -1,12 +1,22 @@
 package wp:demo@0.1.0;
 
 interface types {
+  use cols.{str-col};
+
   /// A fake git commit: the row type flowing through the demo pipelines.
   record commit {
     sha: string,
     author: string,
     message: string,
     time: s64,
+  }
+
+  /// The same rows, column by column: one element carries a whole batch.
+  record commit-batch {
+    sha: str-col,
+    author: str-col,
+    message: str-col,
+    time: list<s64>,
   }
 }
 
@@ -26,6 +36,24 @@ world show {
 world count {
   use types.{commit};
   export run: async func(input: stream<commit>, batch: option<u32>) -> u64;
+}
+
+/// Columnar producer: the same commits as `gen`, `batch` rows per element.
+world gen-cols {
+  use types.{commit-batch};
+  export run: async func(count: option<u64>, batch: option<u32>) -> stream<commit-batch>;
+}
+
+/// Columnar consumer: prints exactly what `show` prints.
+world show-cols {
+  use types.{commit-batch};
+  export run: async func(input: stream<commit-batch>) -> u64;
+}
+
+/// Columnar consumer: counts rows without printing.
+world count-cols {
+  use types.{commit-batch};
+  export run: async func(input: stream<commit-batch>) -> u64;
 }
 
 interface produce {

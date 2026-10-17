@@ -1,24 +1,24 @@
-//! A host-carried pipe: reads batches from the upstream component into
-//! [`Stage`]s and hands them to the downstream component, optionally
-//! stopping after N rows (`take`).
+//! A host-carried pipe: the input half reads batches from the producer
+//! component into [`Stage`]s; the output half hands them to the consumer.
+//! The halves only share a queue, so they can live in different Stores on
+//! different threads. A pipe can also stop after N rows (`take`).
 
-use super::elem::{Elem, LiftTarget, lifting_into};
-use super::plan::Plan;
+use super::elem::{Elem, LiftCache, LiftTarget, lifting_into};
+use super::plan::Need;
 use super::stage::Stage;
 use std::collections::VecDeque;
+use std::future::Future;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
-use wasmtime::StoreContextMut;
-use wasmtime::component::__internal::InterfaceType;
 use wasmtime::component::{
     Destination, ReadBuffer, Source, StreamConsumer, StreamProducer, StreamResult, WriteBuffer,
 };
-use wasmtime::AsContextMut;
+use wasmtime::{AsContextMut, StoreContextMut};
 
-/// Stages buffered between the two sides before the producer is paused.
+/// Stages buffered between the two halves before the producer is paused.
 const MAX_READY: usize = 4;
 
 /// Counters for one pipe, readable after the run.
@@ -44,6 +44,8 @@ pub struct Counters {
 #[derive(Clone, Debug)]
 pub struct BatchShape {
     pub cols: Vec<Col>,
+    /// Each column's field name.
+    pub names: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,6 +66,18 @@ fn wr32(b: &mut [u8], at: usize, v: usize) {
 }
 
 impl BatchShape {
+    /// Keep only the columns `need` reads (unread ones aren't staged, so
+    /// they can't be cut). `None` if that leaves nothing to count rows with.
+    pub fn only(&self, need: &Need) -> Option<BatchShape> {
+        let Need::Fields(fields) = need else { return Some(self.clone()) };
+        let keep: Vec<usize> =
+            (0..self.cols.len()).filter(|&i| fields.iter().any(|(n, _)| *n == self.names[i])).collect();
+        (!keep.is_empty()).then(|| BatchShape {
+            cols: keep.iter().map(|&i| self.cols[i].clone()).collect(),
+            names: keep.iter().map(|&i| self.names[i].clone()).collect(),
+        })
+    }
+
     /// Rows in batch `i` of `stage`.
     fn rows(&self, stage: &Stage, i: usize) -> usize {
         let row = stage.row(i);
@@ -91,53 +105,89 @@ impl BatchShape {
     }
 }
 
-pub enum Limit {
-    /// Forward everything.
-    None,
-    /// Stop after this many stream elements.
-    Elems(u64),
-    /// Stop after this many rows, cutting the last columnar batch short.
-    Rows(u64, BatchShape),
+/// What a pipe does besides carrying rows.
+#[derive(Clone, Debug)]
+pub struct Spec {
+    /// Stop after this many rows (`take`).
+    pub limit: Option<u64>,
+    /// Set for columnar streams: rows are counted, and cut, inside batches.
+    pub shape: Option<BatchShape>,
+    /// The parts of each row the consumer reads; nothing else is copied.
+    pub need: Need,
+}
+
+impl Default for Spec {
+    fn default() -> Self {
+        Spec { limit: None, shape: None, need: Need::All }
+    }
 }
 
 struct State {
     ready: VecDeque<Box<Stage>>,
     free: Vec<Box<Stage>>,
-    /// Rows (or elements) still to accept from upstream.
+    /// Rows still to accept from upstream.
     want: u64,
-    batch: Option<BatchShape>,
+    shape: Option<BatchShape>,
     upstream_done: bool,
     downstream_done: bool,
     reader: Option<Waker>,
     writer: Option<Waker>,
-    lift_plan: Option<(usize, InterfaceType, Arc<Plan>)>,
+    /// Wakes whoever waits for the producer side to finish.
+    done: Option<Waker>,
+    lift_plan: LiftCache,
+    need: Need,
     counters: Arc<Counters>,
+}
+
+impl State {
+    fn wake_done(&mut self) {
+        if let Some(w) = self.done.take() {
+            w.wake();
+        }
+    }
 }
 
 type Shared = Arc<Mutex<State>>;
 
+/// The producer-facing half.
 pub struct PumpIn(Shared);
+/// The consumer-facing half.
 pub struct PumpOut(Shared);
 
-pub fn new(limit: Limit, counters: Arc<Counters>) -> (PumpIn, PumpOut) {
-    let (want, batch) = match limit {
-        Limit::None => (u64::MAX, None),
-        Limit::Elems(n) => (n, None),
-        Limit::Rows(n, shape) => (n, Some(shape)),
-    };
+/// A new pipe; returns its halves and a future that resolves once the
+/// producer side is finished (all rows read, or the consumer hung up).
+pub fn new(spec: Spec, counters: Arc<Counters>) -> (PumpIn, PumpOut, Finished) {
     let st = Arc::new(Mutex::new(State {
         ready: VecDeque::new(),
         free: Vec::new(),
-        want,
-        batch,
+        want: spec.limit.unwrap_or(u64::MAX),
+        shape: spec.shape,
         upstream_done: false,
         downstream_done: false,
         reader: None,
         writer: None,
+        done: None,
         lift_plan: None,
+        need: spec.need,
         counters,
     }));
-    (PumpIn(st.clone()), PumpOut(st))
+    (PumpIn(st.clone()), PumpOut(st.clone()), Finished(st))
+}
+
+/// Resolves when the pipe's producer side has nothing left to do.
+pub struct Finished(Shared);
+
+impl Future for Finished {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let mut st = self.0.lock().unwrap();
+        if st.upstream_done || st.downstream_done {
+            Poll::Ready(())
+        } else {
+            st.done = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
 }
 
 /// A read buffer that only counts: the rows themselves go into the stage.
@@ -158,6 +208,11 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Counting {
         self.got += count;
     }
 }
+
+/// `PumpIn` for one producer element layout.
+pub struct TypedIn<const S: u32, const A: u32>(pub PumpIn);
+/// `PumpOut` for one consumer element layout.
+pub struct TypedOut<const S: u32, const A: u32>(pub PumpOut);
 
 impl<D: 'static, const S: u32, const A: u32> StreamConsumer<D> for TypedIn<S, A> {
     type Item = Elem<S, A>;
@@ -184,23 +239,23 @@ impl<D: 'static, const S: u32, const A: u32> StreamConsumer<D> for TypedIn<S, A>
         }
         let offered = source.remaining(store.as_context_mut());
         // Row streams stop reading at the limit; columnar ones are cut below.
-        let cap = if st.batch.is_some() { offered } else { offered.min(st.want as usize) };
+        let cap = if st.shape.is_some() { offered } else { offered.min(st.want as usize) };
         let mut stage = st.free.pop().unwrap_or_default();
         stage.clear();
         stage.counters = Some(st.counters.clone());
-        let mut target = LiftTarget { stage: &mut stage, plan: &mut st.lift_plan, error: None };
-        let mut buf = Counting { cap, got: 0 };
         let t0 = std::time::Instant::now();
+        let mut target = LiftTarget { stage: &mut stage, plan: &mut st.lift_plan, need: &st.need, error: None };
+        let mut buf = Counting { cap, got: 0 };
         let read = lifting_into(&mut target, || source.read(store, &mut buf));
-        st.counters.lift_ns.fetch_add(t0.elapsed().as_nanos() as u64, Relaxed);
         if let Some(e) = target.error.take() {
             return Poll::Ready(Err(wasmtime::format_err!("{e:#}")));
         }
         read?;
+        st.counters.lift_ns.fetch_add(t0.elapsed().as_nanos() as u64, Relaxed);
 
         let elems = stage.rows;
         let mut rows = elems as u64;
-        if let Some(shape) = &st.batch {
+        if let Some(shape) = &st.shape {
             rows = 0;
             for i in 0..elems {
                 let r = shape.rows(&stage, i) as u64;
@@ -213,7 +268,9 @@ impl<D: 'static, const S: u32, const A: u32> StreamConsumer<D> for TypedIn<S, A>
                 rows += r;
             }
         }
-        st.want -= rows;
+        if st.want != u64::MAX {
+            st.want -= rows;
+        }
         let c = &st.counters;
         c.elems.fetch_add(stage.rows as u64, Relaxed);
         c.rows.fetch_add(rows, Relaxed);
@@ -223,6 +280,7 @@ impl<D: 'static, const S: u32, const A: u32> StreamConsumer<D> for TypedIn<S, A>
         if st.want == 0 {
             // Nothing more will be read; let the consumer finish once drained.
             st.upstream_done = true;
+            st.wake_done();
         }
         if let Some(w) = st.reader.take() {
             w.wake();
@@ -311,14 +369,11 @@ impl<D: 'static, const S: u32, const A: u32> StreamProducer<D> for TypedOut<S, A
     }
 }
 
-/// `PumpIn`/`PumpOut` monomorphized for one element layout.
-pub struct TypedIn<const S: u32, const A: u32>(pub PumpIn);
-pub struct TypedOut<const S: u32, const A: u32>(pub PumpOut);
-
 impl Drop for PumpIn {
     fn drop(&mut self) {
         let mut st = self.0.lock().unwrap();
         st.upstream_done = true;
+        st.wake_done();
         if let Some(w) = st.reader.take() {
             w.wake();
         }
@@ -329,6 +384,7 @@ impl Drop for PumpOut {
     fn drop(&mut self) {
         let mut st = self.0.lock().unwrap();
         st.downstream_done = true;
+        st.wake_done();
         if let Some(w) = st.writer.take() {
             w.wake();
         }
