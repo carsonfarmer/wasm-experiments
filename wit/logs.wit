@@ -1,0 +1,37 @@
+package wp:demo@0.1.0;
+
+/// Web server access logs (Combined Log Format).
+interface logs {
+  enum method { get, head, post, put, delete, patch, options, other }
+
+  /// One request: `ip - - [time] "method path proto" status bytes "referrer" "agent"`.
+  record request {
+    ip: string,
+    /// Unix seconds.
+    time: s64,
+    method: method,
+    path: string,
+    status: u16,
+    bytes: u64,
+    referrer: string,
+    agent: string,
+  }
+}
+
+/// Parses log lines into requests, skipping lines that don't parse.
+world parse-log {
+  use logs.{request};
+  export run: async func(input: stream<u8>) -> stream<request>;
+}
+
+/// Keeps requests whose status is at least `min-status` (default 500).
+world errors {
+  use logs.{request};
+  export run: async func(input: stream<request>, min-status: option<u16>) -> stream<request>;
+}
+
+/// Prints the `n` most requested paths (default 10).
+world top-paths {
+  use logs.{request};
+  export run: async func(input: stream<request>, n: option<u32>);
+}

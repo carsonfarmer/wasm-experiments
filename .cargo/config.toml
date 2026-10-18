@@ -1,0 +1,15 @@
+[alias]
+# Build the example tools into target/wasm32-wasip2/release/<name>.wasm.
+tools = "build --release --target wasm32-wasip2 -p gen -p show -p count -p gen-flat -p count-flat -p parse-log -p errors -p top-paths -p zoo -p zoo-check"
+# Run a pipeline with the example tools: cargo wp 'gen 5 | show'
+wp = "run --release -q -p wp --"
+# Every test, including the end-to-end ones (build the tools first).
+test-all = "test --release -p wp -p logparse"
+
+[env]
+# Where `cargo wp` and the tests find the example tools.
+WP_PATH = { value = "target/wasm32-wasip2/release", relative = true }
+
+# The tools may use 128-bit SIMD (memchr does); Wasmtime enables it by default.
+[target.wasm32-wasip2]
+rustflags = ["-C", "target-feature=+simd128"]

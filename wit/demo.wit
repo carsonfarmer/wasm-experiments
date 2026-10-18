@@ -1,0 +1,49 @@
+package wp:demo@0.1.0;
+
+interface types {
+  /// A fake git commit: rows with strings in them.
+  record commit {
+    sha: string,
+    author: string,
+    message: string,
+    time: s64,
+  }
+
+  /// A sensor reading: rows of plain numbers, with no pointers.
+  record tick {
+    seq: u64,
+    time: s64,
+    value: f64,
+    mask: u32,
+  }
+}
+
+/// Emits `count` commits (forever if omitted), `batch` per write.
+world gen {
+  use types.{commit};
+  export run: async func(count: option<u64>, batch: option<u32>) -> stream<commit>;
+}
+
+/// Prints commits, stopping after `limit` if given.
+world show {
+  use types.{commit};
+  export run: async func(input: stream<commit>, limit: option<u64>);
+}
+
+/// Counts commits, reading `batch` at a time.
+world count {
+  use types.{commit};
+  export run: async func(input: stream<commit>, batch: option<u32>) -> u64;
+}
+
+/// Emits `count` ticks (forever if omitted), `batch` per write.
+world gen-flat {
+  use types.{tick};
+  export run: async func(count: option<u64>, batch: option<u32>) -> stream<tick>;
+}
+
+/// Counts ticks, reading `batch` at a time.
+world count-flat {
+  use types.{tick};
+  export run: async func(input: stream<tick>, batch: option<u32>) -> u64;
+}

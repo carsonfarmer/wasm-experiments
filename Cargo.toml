@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["wp", "tools/*", "bench/loggen", "bench/native"]
+exclude = ["tools/zoo-common"]
+# `cargo build` builds wp and the benchmark helpers; `cargo tools` builds the
+# example tools for wasm32-wasip2 (see .cargo/config.toml).
+default-members = ["wp", "bench/loggen", "bench/native"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+wasmtime = { version = "49.0.3", features = ["wave"] }
+wasmtime-wasi = "49.0.3"
+wit-bindgen = { version = "0.63.0", features = ["async-spawn"] }
+logparse = { path = "tools/logparse" }
+loggen = { path = "bench/loggen" }
+
+# `cargo build --profile profiling`: release, with symbols for profilers.
+[profile.profiling]
+inherits = "release"
+debug = true

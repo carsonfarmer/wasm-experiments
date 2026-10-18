@@ -1,0 +1,8 @@
+[package]
+name = "logparse"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+memchr = "2"
