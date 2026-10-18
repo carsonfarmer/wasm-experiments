@@ -9,7 +9,7 @@ default-members = ["wp", "bench/loggen", "bench/native"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0 WITH LLVM-exception"
 
 [workspace.dependencies]
 wasmtime = { version = "49.0.3", features = ["wave"] }
