@@ -40,8 +40,9 @@ Goal met. `PROFILE=dist bench/compare.sh main 1000000 31`, run twice:
 Two changes did it: mimalloc as the host's allocator (step 1) and a `dist`
 profile with fat LTO for the binary we ship (step 7). The allocator alone
 gives +23%, +46% and +46% (31 pairs), just short on rows with strings.
-Startup is unchanged (6.3 ± 1.0 ms), peak RSS rises by a fixed 4.5 MiB (13
-to 18 MiB for a small pipeline), and the binary shrinks from 34 to 24 MB.
+With mimalloc's eager commit off (step 9), startup and peak RSS are the same
+as `main`'s (6 ms and 13 MiB for a small pipeline), and the binary shrinks
+from 34 to 24 MB.
 
 The rest of the time is in Wasmtime's copy between components and in the
 tools themselves (see the README), so the next big steps are upstream.
@@ -122,6 +123,27 @@ which gives back almost the whole gain. Guests can't reach the host heap, so
 hardening only matters as a second line of defence against a bug in Wasmtime
 or WASI.
 
+### 9. mimalloc without eager arena commit (kept)
+
+mimalloc commits its arena up front, which cost about 6 MiB of private
+memory. With it off, interleaved against the `dist` build of step 7 (peak
+RSS; throughput over 21 pairs):
+
+| | small pipeline | strings | flat | log query |
+|:--|--:|--:|--:|--:|
+| peak RSS | 19.8 → 13.7 MiB | 20.0 → 13.8 MiB | 19.7 → 13.7 MiB | 43.8 → 38.3 MiB |
+| throughput | | +1.5% | (9 rounds: −2%) | −3.4% |
+
+The throughput changes are within noise, though the log query may pay a few
+percent for committing memory as it grows. The crate has no feature for this
+option, and its Rust bindings lack the option's constant, so setting it from
+code would take an `unsafe` FFI call, a magic number and a hand-built tokio
+runtime. Instead `.cargo/config.toml` passes
+`-DMI_DEFAULT_ARENA_EAGER_COMMIT=0` to the C build: two lines, but they only
+apply to builds from this repository (not `cargo install --git`), and are
+skipped if `CFLAGS` is already set. A feature in the mimalloc crate would be
+the proper fix.
+
 ### Not tried, and why
 
 - Wasmtime `Config` settings: none touch the copy path. The host-to-guest
@@ -144,12 +166,9 @@ paused on an empty stdin):
 | shared libraries | 2.1 | 2.1 | 2.1 MiB |
 | private: heap, wasm memories, stacks | 2.7 | 13.8 | 13.5 MiB |
 
-About 6 MiB of mimalloc's extra is its eager arena commit, and costs nothing
-to turn off (`MIMALLOC_ARENA_EAGER_COMMIT=0`: the same speed, 17.6 → 11.6 MiB
-peak for a small pipeline, below `main`). But the mimalloc crate has no
-feature for it, so setting it takes an `unsafe` call or a C define. The log
-query's 42 MiB is mostly data: `top-paths` keeps every distinct path, and the
-native version needs 20 MiB for the same.
+About 6 MiB of mimalloc's extra was its eager arena commit, now turned off
+(step 9). The log query's peak is mostly data: `top-paths` keeps every
+distinct path, and the native version needs 20 MiB for the same.
 
 ## Startup
 

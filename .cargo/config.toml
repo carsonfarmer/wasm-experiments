@@ -9,6 +9,9 @@ test-all = "test --release -p wp -p logparse"
 [env]
 # Where `cargo wp` and the tests find the example tools.
 WP_PATH = { value = "target/wasm32-wasip2/release", relative = true }
+# mimalloc commits its arena up front by default: about 6 MiB of memory for
+# no speed (bench/PERF.md). The crate has no feature for this.
+CFLAGS = "-DMI_DEFAULT_ARENA_EAGER_COMMIT=0"
 
 # The tools may use 128-bit SIMD (memchr does); Wasmtime enables it by default.
 [target.wasm32-wasip2]

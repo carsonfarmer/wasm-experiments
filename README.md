@@ -125,15 +125,16 @@ from `bench/run.sh`):
 
 | | wall time | peak RSS |
 |:--|--:|--:|
-| startup, warm cache (`gen 1 \| count`) | 6 ms | 18 MiB |
-| `gen \| count`: commits, 3 strings each | 0.80 s | 18 MiB |
-| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.29 s | 18 MiB |
-| `parse-log \| top-paths 10` over a 210 MB log | 1.79 s | 42 MiB |
+| startup, warm cache (`gen 1 \| count`) | 6 ms | 13 MiB |
+| `gen \| count`: commits, 3 strings each | 0.71 s | 13 MiB |
+| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.26 s | 13 MiB |
+| `parse-log \| top-paths 10` over a 210 MB log | 1.78 s | 38 MiB |
 | the same query in native Rust (same parser, no wasm) | 0.28 s | 20 MiB |
-| the same query in `mawk \| sort \| head` | 0.95 s | 17 MiB |
+| the same query in `mawk \| sort \| head` | 0.96 s | 17 MiB |
 
-That's 42–61% more throughput than the first version, from a faster
-allocator and link-time optimization ([bench/PERF.md](bench/PERF.md)). `wp`
+That's 42–61% more throughput than the first version in the same memory,
+from a faster allocator and link-time optimization
+([bench/PERF.md](bench/PERF.md)). `wp`
 is still about 6× slower than native code. A profile (callgrind, with
 `bench/profile.sh`) shows where the time goes. 61–96% of it is Wasmtime
 copying rows between components, not the tools:
