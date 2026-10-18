@@ -27,31 +27,100 @@ change over pairs. Two identical builds agree within ±4% on this machine (a
 2-core VM with no hardware counters), so smaller changes are noise.
 `bench/profile.sh` counts instructions with callgrind to say *why*.
 
+## Result
+
+Goal met. `PROFILE=dist bench/compare.sh main 1000000 31`, run twice:
+
+| pipeline | `main` | now | throughput |
+|:--|--:|--:|--:|
+| `gen 1000000 \| count` | 996, 981 ms | 702, 706 ms | **+42%, +42%** |
+| `gen-flat 1000000 \| count-flat` | 423, 422 ms | 259, 263 ms | **+61%, +55%** |
+| `parse-log \| top-paths 10` | 2672, 2631 ms | 1696, 1750 ms | **+56%, +51%** |
+
+Two changes did it: mimalloc as the host's allocator (step 1) and a `dist`
+profile with fat LTO for the binary we ship (step 7). The allocator alone
+gives +23%, +46% and +46% (31 pairs), just short on rows with strings.
+Startup is unchanged (6.3 ± 1.0 ms), peak RSS rises by a fixed 4.5 MiB (13
+to 18 MiB for a small pipeline), and the binary shrinks from 34 to 24 MB.
+
+The rest of the time is in Wasmtime's copy between components and in the
+tools themselves (see the README), so the next big steps are upstream.
+
 ## Log
 
-Each change against `main`, by `bench/compare.sh main` unless noted.
+In order. Medians over interleaved runs; "rounds" means a quick comparison
+of several builds, "pairs" means `bench/compare.sh` against `main`.
 
 ### 1. Host allocator: mimalloc v2 (kept)
 
-Copying a row between components allocates 5–15 times on the host (see the
-README), and glibc's malloc and free were about 30% of the time.
+Copying a row between components allocates 5–15 times on the host, and
+glibc's malloc and free were about 30% of the time. Throughput against
+`main`: +29%/+41%/+48% (15 pairs), then +23%/+46%/+46% (31 pairs).
 
-| | strings | flat | log query |
-|:--|--:|--:|--:|
-| throughput | **+29%** | **+41%** | **+48%** |
-
-Startup goes from 7.2 to 8.1 ms and peak RSS from 14 to 21 MiB: a fixed
-+7 MiB from mimalloc committing its arena up front, the same at any size.
-Alternatives, medians over 9 interleaved rounds:
-
-| allocator | startup | strings | flat | log query | peak RSS |
+| allocator (9 rounds) | startup | strings | flat | log query | peak RSS |
 |:--|--:|--:|--:|--:|--:|
 | glibc (`main`) | 7.2 ms | 1027 ms | 464 ms | 2554 ms | 14 / 38 MiB |
 | mimalloc v3 | 9.9 ms | 748 ms | 310 ms | 1879 ms | 30 / 52 MiB |
-| mimalloc v2 | 8.1 ms | 785 ms | 293 ms | 1841 ms | 21 / 46 MiB |
+| **mimalloc v2** | 8.1 ms | 785 ms | 293 ms | 1841 ms | 21 / 46 MiB |
 | jemalloc | 8.1 ms | 893 ms | 336 ms | 2114 ms | 15 / 61 MiB |
 
-(Peak RSS for a small pipeline / the log query.) v3's extra memory is the
-same eager arena commit (`MIMALLOC_ARENA_EAGER_COMMIT=0` removes it), but
-the crate has no safe way to set it. The `stats` build keeps the system
+(Peak RSS for a small pipeline / the log query.) v2 is as fast as v3 with
+half its memory overhead, which in both is mimalloc committing its arena
+up front (`MIMALLOC_ARENA_EAGER_COMMIT=0` removes it, but the crate has no
+safe way to set that from code). The `stats` build keeps the system
 allocator, since it counts allocations rather than timing them.
+
+### 2. Fat LTO and one codegen unit in `release` (not kept)
+
++11%/+3%/+14% on top of step 1 (9 rounds, host only). But the tools can't
+build with LTO (wit-bindgen links a prebuilt object with no bitcode), and
+every release link, including the test binaries, goes from seconds to
+minutes. Revisited as step 7.
+
+### 3. A faster allocator in the tools (not possible)
+
+Most guest time is allocation too, so `rlsf` (TLSF, with a safe `const`
+constructor) went into the six headline tools. They corrupted their heaps
+within a second (`count` trapped in `deallocate` on a pointer made of string
+bytes). The likely cause is that wasi-libc's own `malloc` still runs for libc
+internals, so two allocators grow the same memory. Not something to fight
+from a tool.
+
+### 4. Batch sizes (no change)
+
+The tools' default of 256 rows per read and write is already the best
+(7 rounds):
+
+| batch | 64 | 128 | 256 | 512 | 1024 | 2048 |
+|:--|--:|--:|--:|--:|--:|--:|
+| strings | 846 | 796 | **763** | 800 | 774 | 805 ms |
+| flat | 313 | 290 | 297 | 281 | **273** | 288 ms |
+
+### 5. One codegen unit without LTO (no gain)
+
+−5%/+4%/+0% (9 rounds): noise. The gain in step 2 is inlining *across*
+crates.
+
+### 6. Thin LTO (no gain)
+
++0%/−1%/+2% (9 rounds), and incremental builds of `wp` and its tests went
+from about a minute to 8.
+
+### 7. A `dist` profile with fat LTO (kept)
+
+The ripgrep approach: `release` stays quick to build and is what the tools,
+tests and `cargo wp` use. `cargo build --profile dist -p wp` builds the
+binary to ship, with fat LTO and one codegen unit. A clean build takes about
+8 minutes on this machine. Together with step 1: +42%/+61%/+56% (31 pairs,
+the result above).
+
+### Not tried, and why
+
+- Wasmtime `Config` settings: none touch the copy path. The host-to-guest
+  call that copying a string makes (about 1,150 instructions of Wasmtime
+  machinery each, 3 per `commit`) has no knobs, and call hooks, fuel and
+  epochs are already off.
+- Pooling allocator, `InstancePre`, reusing stores: these make startup
+  cheaper, which is 6 ms of a run.
+- Running tools in parallel: streams can't cross Stores, and a Store is
+  single-threaded.

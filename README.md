@@ -119,37 +119,40 @@ tools concurrently on one thread. Nothing in `wp` touches a row.
 
 ## Performance
 
-One million rows on a 2-core VM ([all results](bench/results/results.md),
+One million rows on a 2-core VM, with `wp` built by
+`cargo build --profile dist -p wp` ([all results](bench/results/results.md),
 from `bench/run.sh`):
 
 | | wall time | peak RSS |
 |:--|--:|--:|
-| startup, warm cache (`gen 1 \| count`) | 6 ms | 13 MiB |
-| `gen \| count`: commits, 3 strings each | 1.00 s | 13 MiB |
-| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.38 s | 13 MiB |
-| `parse-log \| top-paths 10` over a 210 MB log | 2.74 s | 38 MiB |
+| startup, warm cache (`gen 1 \| count`) | 6 ms | 18 MiB |
+| `gen \| count`: commits, 3 strings each | 0.80 s | 18 MiB |
+| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.29 s | 18 MiB |
+| `parse-log \| top-paths 10` over a 210 MB log | 1.79 s | 42 MiB |
 | the same query in native Rust (same parser, no wasm) | 0.28 s | 20 MiB |
-| the same query in `mawk \| sort \| head` | 0.81 s | 17 MiB |
+| the same query in `mawk \| sort \| head` | 0.95 s | 17 MiB |
 
-So `wp` is about 10× slower than native code today. A profile (callgrind)
-(`bench/profile.sh`) shows where the time goes. 69–98% of it is Wasmtime
+That's 42–61% more throughput than the first version, from a faster
+allocator and link-time optimization ([bench/PERF.md](bench/PERF.md)). `wp`
+is still about 6× slower than native code. A profile (callgrind, with
+`bench/profile.sh`) shows where the time goes. 61–96% of it is Wasmtime
 copying rows between components, not the tools:
 
 | pipeline | instructions per row | in Wasmtime's copy |
 |:--|--:|--:|
-| `gen-flat \| count-flat` | 4,280 | 98% |
-| `gen \| count` | 12,450 | 69% |
-| `parse-log \| top-paths` | 20,760 | 71% |
+| `gen-flat \| count-flat` | 2,590 | 96% |
+| `gen \| count` | 9,760 | 61% |
+| `parse-log \| top-paths` | 16,160 | 63% |
 
 - Only streams of primitive numbers are copied with a `memcpy`. Every other
   payload, even a record of four numbers, is lifted into a `Vec<Val>` and
   lowered again one row at a time ([a TODO in Wasmtime][flat-todo]).
 - A `Val::Record` owns its field names as `String`s, so every row copied
-  allocates them: 5 host allocations per `tick`, 8 per `commit`. So much of
-  the copy is `malloc` and `free` that these counts move by up to 20% with
-  the heap's layout.
+  allocates them: 5 host allocations per `tick`, 8 per `commit`.
+- Each string copied into a tool is a call into that tool's `realloc`, about
+  1,150 instructions of Wasmtime's call machinery each.
 
-Both are Wasmtime's to fix, and both are the next step for this project.
+All three are Wasmtime's to fix, and the next step for this project.
 
 [flat-todo]: https://github.com/bytecodealliance/wasmtime/blob/a33c18ed395ab09d8366d593c7941fc479efa9c6/crates/cranelift/src/compiler/component.rs#L823-L824
 
@@ -161,6 +164,8 @@ $ cargo test-all     # unit and end-to-end tests
 $ cargo wp 'gen 5 | show'
 $ bench/run.sh       # benchmarks (needs hyperfine, mawk and jq)
 $ bench/profile.sh   # where the time goes (needs valgrind)
+$ bench/compare.sh   # throughput against main
+$ cargo build --profile dist -p wp   # the binary to ship (slow to link)
 ```
 
 [WASI 0.3]: https://wasi.dev

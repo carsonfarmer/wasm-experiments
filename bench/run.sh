@@ -13,24 +13,26 @@ mkdir -p bench/data "$out" "$raw"
 export LC_ALL=C WP_PATH=target/wasm32-wasip2/release
 
 cargo tools -q
-cargo build --release -q -p wp -p native-logs -p loggen
+cargo build --release -q -p native-logs -p loggen
+cargo build --profile dist -q -p wp
 cargo build --release -q -p wp --features stats --target-dir target/stats
 log=bench/data/access-$rows.log
 [[ -f $log ]] || target/release/loggen "$rows" "$log"
-wp=target/release/wp
+wp=target/dist/wp
 results=$out/results.md
 cat > "$results" <<EOF
 # Results
 
 $rows rows on $(nproc) × $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs),
-$(date -u +%F). Made by \`bench/run.sh $rows\`.
+$(date -u +%F), with \`wp\` built by \`cargo build --profile dist\`.
+Made by \`bench/run.sh $rows\`.
 EOF
 
 run() { # NAME TITLE HYPERFINE-ARGS...: time commands and add a table of results
   local name=$1 title=$2; shift 2
   hyperfine --style basic --metrics default --export-json "$raw/$name.json" "$@"
   printf '\n## %s\n\n| command | wall time | peak RSS |\n|:--|--:|--:|\n' "$title" >> "$results"
-  jq -r '.results[] | .summary as $s | "| `\(.command | sub("^<\\S+ "; "") | gsub("target/release/"; "")
+  jq -r '.results[] | .summary as $s | "| `\(.command | sub("^<\\S+ "; "") | gsub("target/[a-z]+/"; "")
     | gsub("\\|"; "\\|"))` | \($s.time_wall_clock.mean * 1000 | round) ms | \($s.memory_peak_resident.mean
     / 1048576 * 10 | round / 10) MiB |"' "$raw/$name.json" >> "$results"
 }

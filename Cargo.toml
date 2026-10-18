@@ -17,6 +17,15 @@ wit-bindgen = { version = "0.63.0", features = ["async-spawn"] }
 logparse = { path = "tools/logparse" }
 loggen = { path = "bench/loggen" }
 
+# `cargo build --profile dist -p wp`: the binary to ship. Inlining across
+# crates speeds up Wasmtime's copies between components (bench/PERF.md), but
+# links take minutes, and the tools can't use LTO (wit-bindgen links a
+# prebuilt object).
+[profile.dist]
+inherits = "release"
+codegen-units = 1
+lto = "fat"
+
 # `cargo build --profile profiling`: release, with symbols for profilers.
 [profile.profiling]
 inherits = "release"
