@@ -170,6 +170,8 @@ $ cargo build --profile dist -p wp   # the binary to ship (slow to link)
 
 ## License
 
+Copyright 2026 Carson Farmer <carson.farmer@gmail.com>.
+
 Licensed under the [Apache License, Version 2.0, with the LLVM
 exception](LICENSE), like Wasmtime. Unless you explicitly state otherwise,
 any contribution intentionally submitted for inclusion in this project, as
