@@ -6,6 +6,12 @@ use std::time::Instant;
 use wasmtime_wasi::WasiCtx;
 use wp::Wp;
 
+// Copying rows between components allocates a lot on the host, so the
+// allocator matters (bench/PERF.md). With `stats`, count allocations instead.
+#[cfg(not(feature = "stats"))]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[cfg(feature = "stats")]
 #[global_allocator]
 static ALLOC: &stats_alloc::StatsAlloc<std::alloc::System> = &stats_alloc::INSTRUMENTED_SYSTEM;
