@@ -3,6 +3,7 @@ name = "wp"
 description = "Unix-style pipelines of WebAssembly components connected by typed streams"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [features]
 # Count host allocations for `--stats` (used by the benchmarks).
