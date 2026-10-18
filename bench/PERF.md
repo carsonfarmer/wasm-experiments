@@ -114,6 +114,14 @@ binary to ship, with fat LTO and one codegen unit. A clean build takes about
 8 minutes on this machine. Together with step 1: +42%/+61%/+56% (31 pairs,
 the result above).
 
+### 8. mimalloc's `secure` mode (not kept)
+
+Guard pages, encoded free lists and double-free checks, for a heap at least
+as hardened as glibc's. Costs 26–29% throughput (9 rounds, release builds),
+which gives back almost the whole gain. Guests can't reach the host heap, so
+hardening only matters as a second line of defence against a bug in Wasmtime
+or WASI.
+
 ### Not tried, and why
 
 - Wasmtime `Config` settings: none touch the copy path. The host-to-guest
@@ -124,3 +132,31 @@ the result above).
   cheaper, which is 6 ms of a run.
 - Running tools in parallel: streams can't cross Stores, and a Store is
   single-threaded.
+
+## Memory
+
+Resident memory at startup with two tools loaded (`parse-log | top-paths`
+paused on an empty stdin):
+
+| | `main` (glibc) | release (mimalloc) | dist |
+|:--|--:|--:|--:|
+| `wp`'s code pages (shared, clean) | 8.2 | 8.4 | 6.3 MiB |
+| shared libraries | 2.1 | 2.1 | 2.1 MiB |
+| private: heap, wasm memories, stacks | 2.7 | 13.8 | 13.5 MiB |
+
+About 6 MiB of mimalloc's extra is its eager arena commit, and costs nothing
+to turn off (`MIMALLOC_ARENA_EAGER_COMMIT=0`: the same speed, 17.6 → 11.6 MiB
+peak for a small pipeline, below `main`). But the mimalloc crate has no
+feature for it, so setting it takes an `unsafe` call or a C define. The log
+query's 42 MiB is mostly data: `top-paths` keeps every distinct path, and the
+native version needs 20 MiB for the same.
+
+## Startup
+
+5.3 ms for `gen 1 | count` (dist, hyperfine): 1.5 ms is this VM's cost of
+starting any process (`true` takes 1.46 ms), 0.35 ms starting `wp`, about
+2.7 ms loading the two tools from Wasmtime's cache, and 0.5 ms instantiating
+and running them. The cache hashes each `.wasm`, then reads, decompresses and
+copies its compiled code: 1.0–2.2 ms per tool. A precompiled `.cwasm` loads
+in 0.23–0.62 ms, but `Component::deserialize_file` is `unsafe`, since it
+trusts the file's native code.
