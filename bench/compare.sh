@@ -6,7 +6,8 @@
 #   bench/compare.sh [REF] [ROWS] [RUNS]     (default: main, 1000000, 15)
 #
 # REF is built in its own worktree under target/compare/. Both builds of wp
-# use $PROFILE (default: release), or release for a REF that lacks it. Runs
+# use $PROFILE (default: release), or release for a REF that lacks it; $BIN
+# replaces this tree's build with a given binary (e.g. a PGO build). Runs
 # of the two alternate, so a noisy machine slows both alike, and the
 # change in speed is the median over pairs of runs.
 set -euo pipefail
@@ -18,17 +19,18 @@ grep -q "^\[profile\.$profile\]" "$base/Cargo.toml" && ref_profile=$profile || r
 (cd "$base" && cargo tools -q && cargo build --profile "$ref_profile" -q -p wp)
 cargo tools -q
 cargo build --release -q -p loggen
-cargo build --profile "$profile" -q -p wp
+[[ -n ${BIN:-} ]] || cargo build --profile "$profile" -q -p wp
+ref_bin=$base/target/$ref_profile/wp bin=${BIN:-target/$profile/wp}
 log=bench/data/access-$rows.log
 mkdir -p bench/data
 [[ -f $log ]] || target/release/loggen "$rows" "$log"
 
-echo "| pipeline | $ref ($ref_profile) | this tree ($profile) | faster |"
+echo "| pipeline | $ref ($ref_profile) | this tree (${BIN:-$profile}) | faster |"
 echo "|:--|--:|--:|--:|"
-wp() { # DIR PROFILE: run pipeline $p with DIR's build
-  WP_PATH=$1/target/wasm32-wasip2/release "$1/target/$2/wp" "$p" < "$log"
+wp() { # DIR BIN: run pipeline $p with BIN and DIR's tools
+  WP_PATH=$1/target/wasm32-wasip2/release "$2" "$p" < "$log"
 }
-run() { # DIR PROFILE: one run's wall time in ms
+run() { # DIR BIN: one run's wall time in ms
   local start=$EPOCHREALTIME
   wp "$1" "$2" > /dev/null
   echo "$start $EPOCHREALTIME" | awk '{ print ($2 - $1) * 1000 }'
@@ -36,10 +38,10 @@ run() { # DIR PROFILE: one run's wall time in ms
 median() { sort -g | awk '{ a[NR] = $1 } END { print (a[int((NR + 1) / 2)] + a[int(NR / 2) + 1]) / 2 }'; }
 for p in "gen $rows | count" "gen-flat $rows | count-flat" "parse-log | top-paths 10" "gen 1 | count"; do
   n=$runs; [[ $p == "gen 1 | count" ]] && n=$((runs * 10))
-  [[ $(wp "$base" "$ref_profile") == "$(wp . "$profile")" ]] || { echo "different output: $p" >&2; exit 1; }
+  [[ $(wp "$base" "$ref_bin") == "$(wp . "$bin")" ]] || { echo "different output: $p" >&2; exit 1; }
   pairs=$(for i in $(seq "$n"); do
-    if ((i % 2)); then a=$(run "$base" "$ref_profile") b=$(run . "$profile")
-    else b=$(run . "$profile") a=$(run "$base" "$ref_profile"); fi
+    if ((i % 2)); then a=$(run "$base" "$ref_bin") b=$(run . "$bin")
+    else b=$(run . "$bin") a=$(run "$base" "$ref_bin"); fi
     echo "$a $b"
   done)
   a=$(cut -d' ' -f1 <<< "$pairs" | median) b=$(cut -d' ' -f2 <<< "$pairs" | median)
