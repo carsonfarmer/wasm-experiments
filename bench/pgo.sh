@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build wp with profile-guided optimization: the dist profile, trained on the
-# benchmark pipelines. Writes target/pgo/wp. Needs the llvm-tools component
-# (rustup component add llvm-tools).
+# benchmark pipelines and on every kind of WIT value (zoo). Writes
+# target/pgo/wp. Needs the llvm-tools component (rustup component add
+# llvm-tools).
 #
 #   bench/pgo.sh
 set -euo pipefail
@@ -22,6 +23,7 @@ target/release/loggen 300000 "$dir/train.log"
 "$wp" 'gen-flat 300000 | count-flat' > /dev/null
 "$wp" 'parse-log | top-paths 10' < "$dir/train.log" > /dev/null
 for _ in $(seq 20); do "$wp" 'gen 1 | count' > /dev/null; done
+"$wp" 'zoo 30000 1 | zoo-check 30000 1' > /dev/null
 "$(rustc --print sysroot)/lib/rustlib/$host/bin/llvm-profdata" merge -o "$dir/wp.profdata" "$dir/profiles"
 build optimized "-Cprofile-use=$dir/wp.profdata"
 cp "$dir/optimized/$host/dist/wp" "$dir/wp"
