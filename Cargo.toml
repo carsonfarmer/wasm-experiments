@@ -33,7 +33,11 @@ panic = "abort"
 inherits = "release"
 debug = true
 
-# Experiment: a patched Wasmtime (see /home/user/wt-patched).
+# Wasmtime 49.0.3 with three changes that make stream copies faster, from
+# https://github.com/carsonfarmer/wasmtime/tree/wp/v49.0.3-streams (see
+# bench/PERF.md, round 3). The WASI crates come from there too, so there's
+# one copy of Wasmtime's internals.
 [patch.crates-io]
-wasmtime = { path = "../wt-patched/wasmtime" }
-wasmtime-internal-cranelift = { path = "../wt-patched/wasmtime-internal-cranelift" }
+wasmtime = { git = "https://github.com/carsonfarmer/wasmtime", branch = "wp/v49.0.3-streams" }
+wasmtime-wasi = { git = "https://github.com/carsonfarmer/wasmtime", branch = "wp/v49.0.3-streams" }
+wasmtime-wasi-io = { git = "https://github.com/carsonfarmer/wasmtime", branch = "wp/v49.0.3-streams" }

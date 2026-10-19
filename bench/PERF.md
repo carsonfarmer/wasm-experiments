@@ -388,51 +388,69 @@ separate call into the reading tool's `realloc`.
 
 ## Three changes to Wasmtime
 
-On a local copy of 49.0.3 (`[patch.crates-io]` in `Cargo.toml`), each meant
-as a small upstream PR (branches in a Wasmtime checkout, not yet pushed):
+Each is meant as a small upstream PR, one commit on Wasmtime's `main`, on
+[carsonfarmer/wasmtime](https://github.com/carsonfarmer/wasmtime):
+`stream-copy-flat-records`, `stream-copy-without-val` and
+`lower-context-lookups`. Branch `wp/v49.0.3-streams` has the same three on
+49.0.3, and `Cargo.toml` patches Wasmtime to it.
 
-1. Records and tuples of numbers copy with the existing `memcpy` path.
+1. Records and tuples of numbers without padding copy with the existing
+   `memcpy` path.
 2. Other items copy without `Val`. The batch goes into one host buffer, with
-   each string and list appended and its pointer rewritten. Then each string
-   and list is allocated in the reader and copied, and the batch is copied
-   into the reader's memory in one go. A short plan of the offsets that
-   need work is built once per stream. Validation and `realloc` calls match
+   each string and list appended and its pointer rewritten. Then each value
+   is written to the reader's memory, with its strings and lists allocated
+   by the reader's `realloc`. A plan of what needs work at which offset is
+   built once per stream. Checks, `realloc` calls and the bytes written match
    the `Val` path; payloads with handles or maps still use it.
-3. `LowerContext` looks up the reader's memory and `realloc` once instead
-   of on every call (`Instance::options_memory_mut` was 7%).
+3. `LowerContext` looks up the reader's memory once instead of on every
+   access (`Instance::options_memory_mut` was 7%).
 
-Release builds, the same tools, against unpatched:
+## Review
 
-| | unpatched | 1 | 1 + 2 | 1 + 2 + 3 |
-|:--|--:|--:|--:|--:|
-| flat rows | 351 ms | 27 ms | 23 ms | 23 ms |
-| rows with strings | 914 ms | | 496 ms | 459 ms |
-| log query | 2,075 ms | | 1,204 ms | 1,185 ms |
-| `zoo \| zoo-check` | 268 ms | | 165 ms | 152 ms |
+An adversarial review of each change, before pushing, found three real
+problems, all fixed:
 
-`wp`'s 34 tests and `zoo | zoo-check` (every kind of WIT value) pass, and
-so do Wasmtime's 408 component-model `.wast` tests, two new ones and its Rust
-component-model tests.
+- 1 and 2 copied the writer's padding, and the unused part of a variant's
+  payload, into the reader. Lowering a value leaves those bytes alone, and
+  copying them can leak the writer's memory. Now 1 only takes types without
+  padding, and 2 writes only values.
+- 2 wrote the items only after every `realloc` call, where `Val::store`
+  writes each one before allocating for the next.
+- 3 could hand out two `&mut [u8]` into the same memory through Wasmtime's
+  hidden public API. It now checks the store. It also no longer caches
+  `realloc`, which saved only about 1% of instructions.
+
+The review also cut the changes from about 1,800 lines to 770, mostly in the
+tests. Wasmtime's component-model tests pass on each change and on all three
+together (412 `.wast` tests, 283 Rust tests), and so do `wp`'s 34 tests and
+`zoo | zoo-check` (every kind of WIT value).
 
 ## Result
 
-The PGO build of this branch, with a fresh compile cache, `BIN=target/pgo/wp
-PROFILE=dist bench/compare.sh main 1000000 31`, twice:
+PGO builds of this branch and of the same `wp` on stock Wasmtime 49.0.3,
+paired runs with a compile cache per binary, 31 pairs, twice:
 
-| pipeline | `main` | now | faster |
+| pipeline | stock | patched | faster |
 |:--|--:|--:|--:|
-| `gen 1000000 \| count` | 832, 918 ms | 413, 445 ms | **+103%, +102%** |
-| `gen-flat 1000000 \| count-flat` | 312, 339 ms | 17, 18 ms | **18×, 18×** |
-| `parse-log \| top-paths 10` | 2,012, 1,924 ms | 1,190, 1,137 ms | **+69%, +70%** |
-| `gen 1 \| count` (startup) | 7.5, 7.6 ms | 6.5, 6.5 ms | +16%, +18% |
+| `gen 1000000 \| count` | 563, 543 ms | 376, 364 ms | **+51%, +52%** |
+| `gen-flat 1000000 \| count-flat` | 219, 220 ms | 21, 22 ms | **10.6×, 10.4×** |
+| `parse-log \| top-paths 10` | 1,356, 1,341 ms | 1,001, 1,000 ms | **+36%, +34%** |
+| `zoo 20000 1 \| zoo-check 20000 1` | 177, 178 ms | 125, 123 ms | **+43%, +45%** |
+| `gen 1 \| count` (startup) | 5.3, 5.4 ms | 5.3, 5.4 ms | −1%, +0% |
 
-The log query now beats the direct-call prototype (1,261 ms). What's left of
-it is mostly the tools' own work: parsing, and `malloc` and `free` in wasm.
-In the strings pipeline, guest code is 58% of the time. On the host, the
-per-string call into the reader's `realloc` is about 16%, which only
-compiling these copies (as calls between components are) would remove.
+Against the changes as they were before the review, this is 6–7% slower on
+strings, 6% on the log query, 4% on `zoo` and 20% on flat rows. Writing each
+value instead of the whole batch at once costs about 170 instructions per row
+of strings, and `tick` has 4 bytes of padding, so it now takes change 2
+instead of a `memcpy`.
 
-The compile cache matters here: its key covers Wasmtime's version but not
-its code, so a patched build can load code compiled by an unpatched one and
-silently lose change 1. A build from a git checkout of Wasmtime keys on the
-commit instead.
+What's left of the log query is mostly the tools' own work: parsing, and
+`malloc` and `free` in wasm. On the host, each string still costs a call into
+the reader's `realloc`, which only compiling these copies (as calls between
+components are) would remove.
+
+The compile cache keys on Wasmtime's version but not its code, so a build
+against a patched Wasmtime and a stock one share entries and load each
+other's compiled code, which is where change 1 lives. `bench/compare.sh` now
+gives each binary its own cache. Built from a git branch, as here, the key covers
+the commit too.

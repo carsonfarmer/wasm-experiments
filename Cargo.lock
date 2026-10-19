@@ -305,8 +305,7 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6d504c8c7ba3f3accaf8e98b7096beb98e1a271404357744c7e9e730c6865ff"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-assembler-x64-meta",
 ]
@@ -314,8 +313,7 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64-meta"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c065757905596bc06e82969ebd7b92d691b7fd710a7e9e8181ae0c30dab588d0"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-srcgen",
 ]
@@ -323,8 +321,7 @@ dependencies = [
 [[package]]
 name = "cranelift-bforest"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca7162cd4d4fc5f9f2f88d1459d939882203d93a8c5a19ef2c405b2e82ef13f"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-entity",
  "wasmtime-internal-core",
@@ -333,8 +330,7 @@ dependencies = [
 [[package]]
 name = "cranelift-bitset"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ec2ba2d4f3d959ec4023a10266c3dcfb28381d1938d507a9a5e1abb78bbcc88"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "serde",
  "serde_derive",
@@ -344,8 +340,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51a64cb821d5fed56bdd6053acd36fa928cd82b70bf6b19b8b14b8b27d047b9a"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "bumpalo",
  "cranelift-assembler-x64",
@@ -375,8 +370,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "142be1e267a7497ba3c2b5a829eaf5387b92b9bcdba6e0a6020f1ffccae7f2b8"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
@@ -388,14 +382,12 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e41f75410da6cce8601330137d73718f679db81cb790a33de3871b5c90a0de3"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 
 [[package]]
 name = "cranelift-control"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c2616c6d01c14921ac9289ef65eb7702d9c760dfdc4537a8ee5bf38ea2832c6"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "arbitrary",
 ]
@@ -403,8 +395,7 @@ dependencies = [
 [[package]]
 name = "cranelift-entity"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a03e8b44c4877cf2fb21e5788d514af6fd291a066ed9ae37adf114a25fecb4aa"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-bitset",
  "serde",
@@ -415,8 +406,7 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "366ff7cb014bd08752210eba55a650969f8db9b52670d69d2ea0b23e1e9e3edf"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-codegen",
  "hashbrown 0.17.1",
@@ -428,14 +418,12 @@ dependencies = [
 [[package]]
 name = "cranelift-isle"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea6526ebf9064fff8ce3b1e26afad7027f9e6bb0e45d2b9200e4cbab8343345"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 
 [[package]]
 name = "cranelift-native"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b44d323f3e5108a8a5bc61f3acd227285ece066e19afe9aece211d66b34a64ea"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-codegen",
  "libc",
@@ -445,8 +433,7 @@ dependencies = [
 [[package]]
 name = "cranelift-srcgen"
 version = "0.136.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc173168f291ff3b95b5d0769d6a05b1eaef5e6d74c2600affab8396b4e7b420"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 
 [[package]]
 name = "crc32fast"
@@ -1320,8 +1307,7 @@ dependencies = [
 [[package]]
 name = "pulley-interpreter"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "def59f28ccaf2cb4f8dfaac83197fd7d56a4470a70e4f2589454c731370101c5"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-bitset",
  "log",
@@ -1332,8 +1318,7 @@ dependencies = [
 [[package]]
 name = "pulley-macros"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1834d3b3ef994f266a0c9ed29a8214f2c2faaa9b1c44babfa57566bb05af83"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2058,6 +2043,7 @@ dependencies = [
 [[package]]
 name = "wasmtime"
 version = "49.0.3"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "addr2line",
  "async-trait",
@@ -2110,8 +2096,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-environ"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e915c27826de4f7b4411b61fd6db32ca448657a5136b8c8e8874a15e90cecbf4"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "anyhow",
  "cpp_demangle",
@@ -2141,8 +2126,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-cache"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "952086551d2041430a159fe4bda3471cfea3d52846b93c825829cea9dd01954d"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "base64",
  "directories-next",
@@ -2161,8 +2145,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-component-macro"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d95f531a0b809fd9fd158be6133c97bd2fc628ac47f5812aff3e3b5624eb02c2"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -2176,14 +2159,12 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-component-util"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e754a3ff5690c34eb4713bd7c65f60dd607ead4e39042cbf52ac8011de14455b"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 
 [[package]]
 name = "wasmtime-internal-core"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba00c5db77adb0749ee059068e5a417bfac3d8969f5a3479d9bd1ca8c1ba248d"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "anyhow",
  "hashbrown 0.17.1",
@@ -2194,6 +2175,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-cranelift"
 version = "49.0.3"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-codegen",
  "cranelift-control",
@@ -2218,8 +2200,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-fiber"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eb3f21bc32b5382ea95f83ce9a5f2f62b68f1b25a37d0802a41a65236eae5ae"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cc",
  "libc",
@@ -2232,8 +2213,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-jit-debug"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e786f9925126e0d2e466c5308e572e8b6226f4047596228a3d63d99528a78949"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cc",
  "object",
@@ -2244,8 +2224,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-jit-icache-coherence"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92cb1dd5da78f5b21d65e91063bdd8c2eb343c1f077a1dcbc29003d4a794abb0"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "libc",
  "wasmtime-internal-core",
@@ -2255,8 +2234,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-unwinder"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0243d244f6dd07ccd114e6bb099e8dd1197b47de5c054576adc9483f80f65d8"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -2267,8 +2245,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-versioned-export-macros"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20fa5616cd875ec78f5b92020fa47ced7c8bb923079185c8475751098b8c4a69"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2278,8 +2255,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-wit-bindgen"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad5e8cef56790d4741b62f7b6c971af53b2ad4c2d1603f8ffe86872763147aa"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -2292,8 +2268,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wasi"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284555904d42017e049fd57c05810b7975075c322481c045f99b07385fb7a5ba"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "async-trait",
  "bitflags",
@@ -2317,8 +2292,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wasi-io"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebaf573aae85636595bdb976b6c76e9277e1f81db067aff6764cb256e0c17dff"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2361,8 +2335,7 @@ dependencies = [
 [[package]]
 name = "wiggle"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3dcdc2980b91d0e7db6975caee4f553c6e37fd8e1464a38b09baceed3fe568"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "bitflags",
  "thiserror 2.0.21",
@@ -2375,8 +2348,7 @@ dependencies = [
 [[package]]
 name = "wiggle-generate"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4765433ad668e225812b956e0f598011e5cdab4d1a57b2d295ab6863e36ff231"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2389,8 +2361,7 @@ dependencies = [
 [[package]]
 name = "wiggle-macro"
 version = "49.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d94c6623099d11a3fee39986492e803dd0db6676c9d40ab9553a7edd29f317e5"
+source = "git+https://github.com/carsonfarmer/wasmtime?branch=wp%2Fv49.0.3-streams#f2276c3c93204be304dd0e1a2def5cf2408e324c"
 dependencies = [
  "proc-macro2",
  "quote",
