@@ -23,8 +23,8 @@ cargo build --release -q -p loggen
 ref_bin=$base/target/$ref_profile/wp bin=${BIN:-target/$profile/wp}
 # Run copies of both: a copy starts faster than the file the linker wrote (it
 # takes fewer page faults), which would skew startup unless both are copies.
-tmp=$(mktemp -d -p target) && trap 'rm -rf "$tmp"' EXIT
-cp "$ref_bin" "$tmp/ref" && cp "$bin" "$tmp/this" && ref_bin=$tmp/ref bin=$tmp/this
+tmp=$(mktemp -d -p target); trap 'rm -rf "$tmp"' EXIT
+cp "$ref_bin" "$tmp/ref"; cp "$bin" "$tmp/this"; ref_bin=$tmp/ref bin=$tmp/this
 log=bench/data/access-$rows.log
 mkdir -p bench/data
 [[ -f $log ]] || target/release/loggen "$rows" "$log"
