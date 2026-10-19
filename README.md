@@ -119,31 +119,31 @@ tools concurrently on one thread. Nothing in `wp` touches a row.
 
 ## Performance
 
-One million rows on a 2-core VM, with `wp` built by
-`cargo build --profile dist -p wp` ([all results](bench/results/results.md),
-from `bench/run.sh`):
+One million rows on a 4-vCPU cloud VM, with `wp` built by `bench/pgo.sh`
+([all results](bench/results/results.md), from `bench/run.sh`):
 
 | | wall time | peak RSS |
 |:--|--:|--:|
-| startup, warm cache (`gen 1 \| count`) | 6 ms | 13 MiB |
-| `gen \| count`: commits, 3 strings each | 0.71 s | 13 MiB |
-| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.26 s | 13 MiB |
-| `parse-log \| top-paths 10` over a 210 MB log | 1.78 s | 38 MiB |
-| the same query in native Rust (same parser, no wasm) | 0.28 s | 20 MiB |
-| the same query in `mawk \| sort \| head` | 0.96 s | 17 MiB |
+| startup, warm cache (`gen 1 \| count`) | 6 ms | 9 MiB |
+| `gen \| count`: commits, 3 strings each | 0.70 s | 9 MiB |
+| `gen-flat \| count-flat`: ticks, 4 numbers each | 0.28 s | 9 MiB |
+| `parse-log \| top-paths 10` over a 210 MB log | 1.72 s | 34 MiB |
+| the same query in native Rust (same parser, no wasm) | 0.35 s | 20 MiB |
+| the same query in `mawk \| sort \| head` | 1.15 s | 17 MiB |
 
-That's 42–61% more throughput than the first version in the same memory,
-from a faster allocator and link-time optimization
-([bench/PERF.md](bench/PERF.md)). `wp`
-is still about 6× slower than native code. A profile (callgrind, with
-`bench/profile.sh`) shows where the time goes. 61–96% of it is Wasmtime
-copying rows between components, not the tools:
+That's 80–102% more throughput than the first version and 19% faster
+startup, in less memory, from a faster allocator, link-time and
+profile-guided optimization, and a few Wasmtime settings
+([bench/PERF.md](bench/PERF.md)). `wp` is still about 5× slower than native
+code. A profile (callgrind, with `bench/profile.sh`) shows where the time
+goes. 64–97% of it is Wasmtime copying rows between components, not the
+tools:
 
 | pipeline | instructions per row | in Wasmtime's copy |
 |:--|--:|--:|
-| `gen-flat \| count-flat` | 2,590 | 96% |
-| `gen \| count` | 9,760 | 61% |
-| `parse-log \| top-paths` | 16,160 | 63% |
+| `gen-flat \| count-flat` | 2,584 | 97% |
+| `gen \| count` | 9,177 | 64% |
+| `parse-log \| top-paths` | 15,327 | 65% |
 
 - Only streams of primitive numbers are copied with a `memcpy`. Every other
   payload, even a record of four numbers, is lifted into a `Vec<Val>` and
@@ -163,11 +163,15 @@ All three are Wasmtime's to fix, and the next step for this project.
 $ cargo tools        # build the example tools
 $ cargo test-all     # unit and end-to-end tests
 $ cargo wp 'gen 5 | show'
-$ bench/run.sh       # benchmarks (needs hyperfine, mawk and jq)
+$ bench/run.sh       # benchmarks (needs hyperfine, mawk, jq and llvm-tools)
 $ bench/profile.sh   # where the time goes (needs valgrind)
-$ bench/compare.sh   # throughput against main
-$ cargo build --profile dist -p wp   # the binary to ship (slow to link)
+$ bench/compare.sh   # throughput and startup against main
+$ bench/pgo.sh       # the binary to ship: target/pgo/wp (needs llvm-tools)
 ```
+
+`bench/pgo.sh` builds the `dist` profile (fat LTO) twice, to train and then
+apply profile-guided optimization, which takes about 15 minutes on 4 cores.
+`cargo build --profile dist -p wp` is the same without PGO.
 
 ## License
 
