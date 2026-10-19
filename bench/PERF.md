@@ -367,3 +367,72 @@ building and collecting `Vec<(String, Val)>` for each record is about 17%,
 `Instance::options_memory_mut` (looked up for every value lowered) 6.5%,
 `Val::load` 5.6%, `LowerContext::realloc` 3.2%, `Val::store` 2.8% and UTF-8
 validation 2.5%.
+
+# Round 3: streams, faster
+
+## Goal
+
+Keep `stream<T>` as the way tools connect, and make it fast. A prototype
+that handed rows over by direct calls between composed tools (branch
+`design/fused`) was 2× faster on rows with strings and 27× on flat rows,
+which showed that the time goes to how Wasmtime copies stream items, not to
+streams as such.
+
+## Where stream time goes
+
+Wasmtime copies an item between two components by loading it into a `Val`
+(allocating every record field's name as a `String`) and storing it again,
+one item at a time. Only items that are a single number take a `memcpy`
+(a TODO in `flat_stream_element_info`). Each string in an item is also a
+separate call into the reading tool's `realloc`.
+
+## Three changes to Wasmtime
+
+On a local copy of 49.0.3 (`[patch.crates-io]` in `Cargo.toml`), each meant
+as a small upstream PR (branches in a Wasmtime checkout, not yet pushed):
+
+1. Records and tuples of numbers copy with the existing `memcpy` path.
+2. Other items copy without `Val`. The batch goes into one host buffer, with
+   each string and list appended and its pointer rewritten. Then each string
+   and list is allocated in the reader and copied, and the batch is copied
+   into the reader's memory in one go. A short plan of the offsets that
+   need work is built once per stream. Validation and `realloc` calls match
+   the `Val` path; payloads with handles or maps still use it.
+3. `LowerContext` looks up the reader's memory and `realloc` once instead
+   of on every call (`Instance::options_memory_mut` was 7%).
+
+Release builds, the same tools, against unpatched:
+
+| | unpatched | 1 | 1 + 2 | 1 + 2 + 3 |
+|:--|--:|--:|--:|--:|
+| flat rows | 351 ms | 27 ms | 23 ms | 23 ms |
+| rows with strings | 914 ms | | 496 ms | 459 ms |
+| log query | 2,075 ms | | 1,204 ms | 1,185 ms |
+| `zoo \| zoo-check` | 268 ms | | 165 ms | 152 ms |
+
+`wp`'s 34 tests and `zoo | zoo-check` (every kind of WIT value) pass, and
+so do Wasmtime's 408 component-model `.wast` tests, two new ones and its Rust
+component-model tests.
+
+## Result
+
+The PGO build of this branch, with a fresh compile cache, `BIN=target/pgo/wp
+PROFILE=dist bench/compare.sh main 1000000 31`, twice:
+
+| pipeline | `main` | now | faster |
+|:--|--:|--:|--:|
+| `gen 1000000 \| count` | 832, 918 ms | 413, 445 ms | **+103%, +102%** |
+| `gen-flat 1000000 \| count-flat` | 312, 339 ms | 17, 18 ms | **18×, 18×** |
+| `parse-log \| top-paths 10` | 2,012, 1,924 ms | 1,190, 1,137 ms | **+69%, +70%** |
+| `gen 1 \| count` (startup) | 7.5, 7.6 ms | 6.5, 6.5 ms | +16%, +18% |
+
+The log query now beats the direct-call prototype (1,261 ms). What's left of
+it is mostly the tools' own work: parsing, and `malloc` and `free` in wasm.
+In the strings pipeline, guest code is 58% of the time. On the host, the
+per-string call into the reader's `realloc` is about 16%, which only
+compiling these copies (as calls between components are) would remove.
+
+The compile cache matters here: its key covers Wasmtime's version but not
+its code, so a patched build can load code compiled by an unpatched one and
+silently lose change 1. A build from a git checkout of Wasmtime keys on the
+commit instead.
