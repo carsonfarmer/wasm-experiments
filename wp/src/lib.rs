@@ -42,6 +42,9 @@ impl Wp {
         let mut config = Config::new();
         // Compiled tools are cached on disk, so loading one is a quick read.
         config.wasm_component_model_async(true).cache(Some(Cache::new(CacheConfig::new())?));
+        // Smaller compiled tools load faster. Without these, trap backtraces
+        // lack wasm offsets and other unwinders can't walk through the tools.
+        config.generate_address_map(false).native_unwind_info(false);
         let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
