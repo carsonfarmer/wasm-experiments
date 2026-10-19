@@ -27,6 +27,7 @@ loggen = { path = "bench/loggen" }
 inherits = "release"
 codegen-units = 1
 lto = "fat"
+panic = "abort"
 
 # `cargo build --profile profiling`: release, with symbols for profilers.
 [profile.profiling]
