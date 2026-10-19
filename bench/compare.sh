@@ -23,6 +23,8 @@ cargo build --release -q -p loggen
 ref_bin=$base/target/$ref_profile/wp bin=${BIN:-target/$profile/wp}
 # Run copies of both: a copy starts faster than the file the linker wrote (it
 # takes fewer page faults), which would skew startup unless both are copies.
+# Each gets its own compile cache: the cache keys on Wasmtime's version, not its
+# code, so a build against a patched Wasmtime could load the other's code.
 tmp=$(mktemp -d -p target); trap 'rm -rf "$tmp"' EXIT
 cp "$ref_bin" "$tmp/ref"; cp "$bin" "$tmp/this"; ref_bin=$tmp/ref bin=$tmp/this
 log=bench/data/access-$rows.log
@@ -31,8 +33,8 @@ mkdir -p bench/data
 
 echo "| pipeline | $ref ($ref_profile) | this tree (${BIN:-$profile}) | faster |"
 echo "|:--|--:|--:|--:|"
-wp() { # DIR BIN: run pipeline $p with BIN and DIR's tools
-  WP_PATH=$1/target/wasm32-wasip2/release "$2" "$p" < "$log"
+wp() { # DIR BIN: run pipeline $p with BIN, its compile cache and DIR's tools
+  XDG_CACHE_HOME=$tmp/cache-${2##*/} WP_PATH=$1/target/wasm32-wasip2/release "$2" "$p" < "$log"
 }
 run() { # DIR BIN: one run's wall time in ms
   local start=$EPOCHREALTIME
