@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Benchmarks. Needs hyperfine, mawk and jq.
+# Benchmarks. Needs hyperfine, mawk, jq and, for bench/pgo.sh, llvm-tools.
 #
 #   bench/run.sh [ROWS]        (default: 1000000)
 #
@@ -14,17 +14,17 @@ export LC_ALL=C WP_PATH=target/wasm32-wasip2/release
 
 cargo tools -q
 cargo build --release -q -p native-logs -p loggen
-cargo build --profile dist -q -p wp
+bench/pgo.sh
 cargo build --release -q -p wp --features stats --target-dir target/stats
 log=bench/data/access-$rows.log
 [[ -f $log ]] || target/release/loggen "$rows" "$log"
-wp=target/dist/wp
+wp=target/pgo/wp
 results=$out/results.md
 cat > "$results" <<EOF
 # Results
 
 $rows rows on $(nproc) × $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs),
-$(date -u +%F), with \`wp\` built by \`cargo build --profile dist\`.
+$(date -u +%F), with \`wp\` built by \`bench/pgo.sh\`.
 Made by \`bench/run.sh $rows\`.
 EOF
 
