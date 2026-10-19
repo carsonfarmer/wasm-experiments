@@ -20,10 +20,10 @@ wp=$dir/instrumented/$host/dist/wp
 export WP_PATH=target/wasm32-wasip2/release
 target/release/loggen 300000 "$dir/train.log"
 "$wp" 'gen 300000 | count' > /dev/null
-"$wp" 'gen-flat 300000 | count-flat' > /dev/null
+"$wp" 'gen-flat 1000000 | count-flat' > /dev/null
 "$wp" 'parse-log | top-paths 10' < "$dir/train.log" > /dev/null
 for _ in $(seq 20); do "$wp" 'gen 1 | count' > /dev/null; done
-"$wp" 'zoo 30000 1 | zoo-check 30000 1' > /dev/null
+"$wp" 'zoo 3000 1 | zoo-check 3000 1' > /dev/null
 "$(rustc --print sysroot)/lib/rustlib/$host/bin/llvm-profdata" merge -o "$dir/wp.profdata" "$dir/profiles"
 build optimized "-Cprofile-use=$dir/wp.profdata"
 cp "$dir/optimized/$host/dist/wp" "$dir/wp"
