@@ -32,3 +32,8 @@ panic = "abort"
 [profile.profiling]
 inherits = "release"
 debug = true
+
+# Experiment: a patched Wasmtime (see /home/user/wt-patched).
+[patch.crates-io]
+wasmtime = { path = "../wt-patched/wasmtime" }
+wasmtime-internal-cranelift = { path = "../wt-patched/wasmtime-internal-cranelift" }
