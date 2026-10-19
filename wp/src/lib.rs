@@ -41,7 +41,11 @@ impl Wp {
     pub fn new(path: Vec<PathBuf>) -> Result<Wp> {
         let mut config = Config::new();
         // Compiled tools are cached on disk, so loading one is a quick read.
-        config.wasm_component_model_async(true).cache(Some(Cache::new(CacheConfig::new())?));
+        // The cache would recompress popular entries at zstd level 20 in a
+        // background thread, costing whichever run does it ~160 MiB.
+        let mut cache = CacheConfig::new();
+        cache.with_optimized_compression_usage_counter_threshold(u64::MAX);
+        config.wasm_component_model_async(true).cache(Some(Cache::new(cache)?));
         // Smaller compiled tools load faster. Without these, trap backtraces
         // lack wasm offsets and other unwinders can't walk through the tools.
         config.generate_address_map(false).native_unwind_info(false);
