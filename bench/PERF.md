@@ -223,8 +223,7 @@ main 1000000 31`, twice:
 On pipelines PGO wasn't trained on: `zoo | zoo-check` +14%, `parse-log |
 errors 404 | top-paths 20` +12%, `gen | show` +36%. Peak RSS is 3 MiB lower
 (9.1 instead of 12.3 MiB for a small pipeline, 34.1 instead of 37.2 MiB for
-the log query), and the binary is 18 MB instead of 24. Against the first
-version (003bacf, `release`): +80% / +102% / +88% / +19%.
+the log query), and the binary is 18 MB instead of 24.
 
 What's left of the log query is mostly Wasmtime's copy (a `Val` per field,
 a `realloc` call into the tool per string) and the tools' `malloc` (step

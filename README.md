@@ -131,11 +131,9 @@ One million rows on a 4-vCPU cloud VM, with `wp` built by `bench/pgo.sh`
 | the same query in native Rust (same parser, no wasm) | 0.35 s | 20 MiB |
 | the same query in `mawk \| sort \| head` | 1.15 s | 17 MiB |
 
-That's 80–102% more throughput than the first version and 19% faster
-startup, in less memory, from a faster allocator, link-time and
-profile-guided optimization, and a few Wasmtime settings
-([bench/PERF.md](bench/PERF.md)). `wp` is still about 5× slower than native
-code. A profile (callgrind, with `bench/profile.sh`) shows where the time
+On the log query, `wp` takes about 5× as long as the same parser compiled
+natively and 1.5× as long as `mawk | sort | head`, with about twice their
+memory. A profile (callgrind, with `bench/profile.sh`) shows where the time
 goes. 64–97% of it is Wasmtime copying rows between components, not the
 tools:
 
