@@ -13,7 +13,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 authors = ["Carson Farmer <carson.farmer@gmail.com>"]
 
 [workspace.dependencies]
-wasmtime = { version = "49.0.3", features = ["wave"] }
+wasmtime = { version = "50.0.0", features = ["wave"] }
 wasmtime-wasi = "49.0.3"
 wit-bindgen = { version = "0.63.0", features = ["async-spawn"] }
 logparse = { path = "tools/logparse" }
